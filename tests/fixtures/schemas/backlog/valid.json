@@ -1,0 +1,86 @@
+{
+  "protocol": "sancho/1.0",
+  "requirements": [
+    {
+      "id": "R-001",
+      "kind": "functional",
+      "statement": "Users sign in with email and password",
+      "priority": "must",
+      "source": "user"
+    }
+  ],
+  "stories": [
+    {
+      "id": "S-001",
+      "title": "Sign in",
+      "as_a": "registered user",
+      "i_want": "to sign in",
+      "so_that": "I see my data",
+      "requirements": [
+        "R-001"
+      ],
+      "priority": "must",
+      "context": "Auth uses the session cookie decided in ADR-0002; follow standards/api.md.",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001.1",
+          "description": "Valid credentials open the dashboard",
+          "verification": {
+            "method": "automated_test",
+            "ref": "tests/auth.test.ts"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "test",
+              "command": "npm test -- auth",
+              "exit_code": 0
+            }
+          ]
+        },
+        {
+          "id": "AC-001.2",
+          "description": "Wrong password shows a generic error",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-001"
+          },
+          "status": "not_verified"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "story": "S-001",
+      "title": "Login endpoint",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [],
+      "complexity": {
+        "score": 4
+      },
+      "evidence": [
+        {
+          "type": "test",
+          "command": "npm test -- auth",
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "id": "T-002",
+      "story": "S-001",
+      "title": "Login screen",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [
+        "T-001"
+      ],
+      "complexity": {
+        "score": 3
+      }
+    }
+  ]
+}

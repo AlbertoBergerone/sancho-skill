@@ -1,0 +1,131 @@
+{
+  "protocol": "sancho/1.0",
+  "generated_at": "2026-10-22T16:10:00+02:00",
+  "scope": {
+    "targets": [
+      "repository fieldlog@4f2a9c1",
+      "http://localhost:8000"
+    ],
+    "environment": "local",
+    "active_testing": true,
+    "approval": {
+      "granted_by": "user",
+      "granted_at": "2026-10-22T10:05:00+02:00",
+      "scope": "OWASP ZAP baseline on http://localhost:8000 (docker compose, test data only)"
+    }
+  },
+  "tools": [
+    {
+      "name": "gitleaks",
+      "version": "8.x",
+      "status": "run",
+      "command": "gitleaks detect --source . --log-opts=--all",
+      "note": "no leaks found"
+    },
+    {
+      "name": "semgrep",
+      "version": "1.x",
+      "status": "run",
+      "command": "semgrep --config p/owasp-top-ten --config p/python --config p/kotlin"
+    },
+    {
+      "name": "sancho cve_enrich",
+      "status": "run",
+      "command": "python cve_enrich.py api/requirements.txt web/package-lock.json --out docs/security/sca.json"
+    },
+    {
+      "name": "trivy",
+      "version": "0.5x",
+      "status": "run",
+      "command": "trivy image fieldlog-api:0.9.0-rc.1",
+      "note": "0 HIGH/CRITICAL in OS packages"
+    },
+    {
+      "name": "zap-baseline",
+      "status": "run",
+      "command": "docker run --network host ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:8000"
+    },
+    {
+      "name": "mobsf",
+      "status": "not_run",
+      "note": "MobSF not installed; run: docker run -p 8001:8000 opensecurity/mobile-security-framework-mobsf and upload app-release.apk"
+    }
+  ],
+  "enrichment": {
+    "osv": "run",
+    "nvd": "run",
+    "kev": "run",
+    "epss": "run"
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "title": "Account enumeration through sign-in error message",
+      "category": "manual",
+      "location": "api/app/routes/auth.py:58",
+      "cwe": [
+        "CWE-204"
+      ],
+      "severity": "major",
+      "severity_rationale": "Enables targeted credential stuffing against a must-have mitigation (TM-01); same issue as DEF-001",
+      "remediation": "Return the same message and status for unknown email and wrong password; add a test",
+      "status": "open"
+    },
+    {
+      "id": "F-002",
+      "title": "Insufficiently Protected Credentials in Requests",
+      "category": "sca",
+      "component": {
+        "name": "requests",
+        "version": "2.19.0",
+        "ecosystem": "PyPI"
+      },
+      "advisory": "GHSA-x84v-xcm2-53pg",
+      "cve": [
+        "CVE-2018-18074"
+      ],
+      "cwe": [
+        "CWE-522"
+      ],
+      "cvss": {
+        "version": "3.1",
+        "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        "base_score": 7.5,
+        "source": "nvd"
+      },
+      "epss": {
+        "score": 0.0085
+      },
+      "kev": false,
+      "fixed_versions": [
+        "2.20.0"
+      ],
+      "severity": "major",
+      "severity_rationale": "CVSS 7.5 >= 7.0",
+      "remediation": "Upgrade requests to 2.20.0 or later (pinned by a legacy constraint in api/constraints.txt)",
+      "status": "fixed"
+    },
+    {
+      "id": "F-003",
+      "title": "Missing Content-Security-Policy header on the web dashboard",
+      "category": "dast",
+      "location": "http://localhost:8000/app/",
+      "cwe": [
+        "CWE-693"
+      ],
+      "severity": "minor",
+      "severity_rationale": "ZAP passive alert (medium); no injection point found, defense in depth",
+      "remediation": "Serve a restrictive CSP from the reverse proxy; see standards/security.md",
+      "status": "open"
+    }
+  ],
+  "summary": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 1,
+    "nit": 0,
+    "not_run": [
+      "MobSF static analysis of the Android APK (tool not installed)"
+    ]
+  }
+}

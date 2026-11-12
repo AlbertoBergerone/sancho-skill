@@ -1,0 +1,59 @@
+{
+  "protocol": "sancho/1.0",
+  "project": {
+    "name": "Demo",
+    "level": "L2",
+    "platforms": [
+      "web",
+      "android"
+    ]
+  },
+  "created_at": "2026-10-28T10:00:00+01:00",
+  "updated_at": "2026-10-28T10:00:00+01:00",
+  "current_phase": "specify",
+  "phases": {
+    "discover": {
+      "status": "approved",
+      "lead": "analyst-pm",
+      "gate": {
+        "checklist": [
+          {
+            "id": "DIS-1",
+            "result": "pass"
+          }
+        ],
+        "coherence": "n/a",
+        "approved_at": "2026-10-28T10:00:00+01:00"
+      }
+    },
+    "specify": {
+      "status": "in_progress",
+      "lead": "analyst-pm",
+      "started_at": "2026-10-28T10:00:00+01:00"
+    },
+    "plan": {
+      "status": "not_started"
+    },
+    "tasks": {
+      "status": "not_started"
+    },
+    "implement": {
+      "status": "not_started"
+    },
+    "verify": {
+      "status": "not_started"
+    },
+    "release": {
+      "status": "not_started"
+    },
+    "evolve": {
+      "status": "skipped",
+      "skip_reason": "user asked to stop after first release"
+    }
+  },
+  "settings": {
+    "language": "it",
+    "complexity_threshold": 7,
+    "tdd": true
+  }
+}

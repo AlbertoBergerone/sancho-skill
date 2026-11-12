@@ -1,0 +1,24 @@
+{
+  "protocol": "sancho/1.0",
+  "cases": [
+    {
+      "id": "UAT-001",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.2"
+      ],
+      "title": "t",
+      "platform": "web",
+      "preconditions": [],
+      "steps": [
+        {
+          "n": 1,
+          "action": "do"
+        }
+      ],
+      "expected_result": "ok",
+      "result": "not_tested"
+    }
+  ],
+  "defects": []
+}

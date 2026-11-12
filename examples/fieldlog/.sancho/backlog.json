@@ -1,0 +1,670 @@
+{
+  "protocol": "sancho/1.0",
+  "requirements": [
+    {
+      "id": "R-001",
+      "kind": "functional",
+      "statement": "Technicians sign in with email and password",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-002",
+      "kind": "functional",
+      "statement": "Technicians log a job: customer, address, activity, duration, photos",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-003",
+      "kind": "functional",
+      "statement": "Back-office staff see and filter all jobs on a web dashboard",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-004",
+      "kind": "non_functional",
+      "statement": "Job logging works fully offline and syncs automatically when the network returns",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-005",
+      "kind": "non_functional",
+      "statement": "Sign-in resists brute force: lockout after 5 failed attempts in 15 minutes, generic error messages",
+      "priority": "must",
+      "source": "standard",
+      "note": "From threat model TM-01"
+    },
+    {
+      "id": "R-006",
+      "kind": "functional",
+      "statement": "Customers can sign the job report on the technician's phone",
+      "priority": "should",
+      "source": "user"
+    },
+    {
+      "id": "R-007",
+      "kind": "constraint",
+      "statement": "All personal data is stored and processed in the EU",
+      "priority": "must",
+      "source": "regulation"
+    },
+    {
+      "id": "R-008",
+      "kind": "functional",
+      "statement": "Export jobs to the accounting system",
+      "priority": "wont",
+      "source": "user",
+      "note": "Next iteration"
+    }
+  ],
+  "stories": [
+    {
+      "id": "S-001",
+      "title": "Technician signs in",
+      "as_a": "field technician",
+      "i_want": "to sign in on my phone",
+      "so_that": "I see the jobs assigned to me",
+      "requirements": [
+        "R-001",
+        "R-005"
+      ],
+      "priority": "must",
+      "platforms": [
+        "android"
+      ],
+      "context": "Technicians use company Android phones (Android 12+). Auth is email + password against our API (ADR-0001), session token stored in EncryptedSharedPreferences. Threat model TM-01 requires lockout after 5 failed attempts in 15 minutes and a generic error that never reveals whether the email exists. Standards: api.md, testing.md. Glossary: 'job' (never 'ticket').",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001.1",
+          "description": "Valid credentials open today's job list",
+          "verification": {
+            "method": "automated_test",
+            "ref": "api/tests/test_auth.py::test_login_ok"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "test",
+              "command": "pytest api/tests/test_auth.py -q",
+              "exit_code": 0,
+              "output_excerpt": "6 passed in 0.84s"
+            }
+          ]
+        },
+        {
+          "id": "AC-001.2",
+          "description": "A wrong password shows a generic error that does not reveal whether the email exists",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-001"
+          },
+          "status": "not_verified"
+        },
+        {
+          "id": "AC-001.3",
+          "description": "After 5 failed attempts in 15 minutes the account is locked for 15 minutes",
+          "verification": {
+            "method": "automated_test",
+            "ref": "api/tests/test_auth.py::test_lockout"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "test",
+              "command": "pytest api/tests/test_auth.py -q",
+              "exit_code": 0,
+              "output_excerpt": "6 passed in 0.84s"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S-002",
+      "title": "Technician logs a job offline",
+      "as_a": "field technician",
+      "i_want": "to log a job even without signal",
+      "so_that": "I never lose or re-type work",
+      "requirements": [
+        "R-002",
+        "R-004",
+        "R-007"
+      ],
+      "priority": "must",
+      "platforms": [
+        "android"
+      ],
+      "context": "Technicians often work in basements and lift shafts without signal: every job must be saved locally first (Room) and synced by a background queue when online (ADR-0001). Conflicts: the server keeps both versions and flags the job for the back-office. Photos are compressed to at most 10 MB per job. Personal data: customer name and address only (constitution, GDPR section).",
+      "acceptance_criteria": [
+        {
+          "id": "AC-002.1",
+          "description": "A job saved in airplane mode appears on the dashboard within 1 minute of reconnecting",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-002"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "uat",
+              "ref": "UAT-002",
+              "note": "pass, executed by the user on 2026-10-22"
+            }
+          ]
+        },
+        {
+          "id": "AC-002.2",
+          "description": "A sync conflict keeps both versions and flags the job",
+          "verification": {
+            "method": "automated_test",
+            "ref": "android/app/src/test/.../SyncConflictTest.kt"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "test",
+              "command": "./gradlew :app:testDebugUnitTest --tests *SyncConflictTest",
+              "exit_code": 0,
+              "output_excerpt": "BUILD SUCCESSFUL, 4 tests completed"
+            }
+          ]
+        },
+        {
+          "id": "AC-002.3",
+          "description": "Photos attached to a job are compressed to at most 10 MB in total",
+          "verification": {
+            "method": "automated_test",
+            "ref": "android/app/src/test/.../PhotoCompressorTest.kt"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "test",
+              "command": "./gradlew :app:testDebugUnitTest --tests *PhotoCompressorTest",
+              "exit_code": 0,
+              "output_excerpt": "BUILD SUCCESSFUL, 3 tests completed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S-003",
+      "title": "Back-office reviews jobs",
+      "as_a": "back-office clerk",
+      "i_want": "to filter jobs by date and technician",
+      "so_that": "I can invoice and plan the next day",
+      "requirements": [
+        "R-003",
+        "R-007"
+      ],
+      "priority": "must",
+      "platforms": [
+        "web"
+      ],
+      "context": "Back-office staff use desktop browsers (Chrome, Edge). The dashboard lists jobs with filters by date range and technician; data is hosted in the EU (R-007). Must meet WCAG 2.2 AA: keyboard navigation, visible focus, contrast from design tokens (ui.md).",
+      "acceptance_criteria": [
+        {
+          "id": "AC-003.1",
+          "description": "Filtering by date range and technician shows only matching jobs",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-003"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "uat",
+              "ref": "UAT-003"
+            }
+          ]
+        },
+        {
+          "id": "AC-003.2",
+          "description": "The dashboard is fully usable with the keyboard alone, with visible focus",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-004"
+          },
+          "status": "not_verified"
+        },
+        {
+          "id": "AC-003.3",
+          "description": "Text and UI colors meet WCAG 2.2 AA contrast",
+          "verification": {
+            "method": "static_check",
+            "ref": "python scripts/contrast_check.py design/tokens.json"
+          },
+          "status": "met",
+          "evidence": [
+            {
+              "type": "command",
+              "command": "python scripts/contrast_check.py design/tokens.json",
+              "exit_code": 0,
+              "output_excerpt": "WCAG AA: 6/6 pairs pass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "S-004",
+      "title": "Customer signs the job report",
+      "as_a": "customer",
+      "i_want": "to sign the report on the technician's phone",
+      "so_that": "the work is confirmed on the spot",
+      "requirements": [
+        "R-006"
+      ],
+      "priority": "should",
+      "platforms": [
+        "android"
+      ],
+      "context": "Some customers must countersign the job. Signature is drawn on the phone, stored as SVG and embedded in the job PDF generated by the API. Should-have kept in MVP by user decision D-003.",
+      "acceptance_criteria": [
+        {
+          "id": "AC-004.1",
+          "description": "The signature appears in the job PDF downloaded from the dashboard",
+          "verification": {
+            "method": "uat",
+            "ref": "UAT-005"
+          },
+          "status": "not_verified"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "story": "S-001",
+      "title": "Monorepo skeleton and CI (lint, typecheck, tests)",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 8,
+          "integrations": 1
+        },
+        "rationale": "files=8:+3, integrations=1:+1"
+      },
+      "criteria": [],
+      "standards": [
+        "architecture.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "gh run view 1182 --log | tail -3",
+          "exit_code": 0,
+          "output_excerpt": "CI #1182 success: lint, typecheck, test"
+        }
+      ]
+    },
+    {
+      "id": "T-002",
+      "story": "S-001",
+      "title": "API container image and docker compose for development",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-001"
+      ],
+      "complexity": {
+        "score": 4,
+        "factors": {
+          "files": 3,
+          "security_sensitive": true
+        },
+        "rationale": "files=3:+2, security_sensitive:+1"
+      },
+      "criteria": [],
+      "standards": [
+        "architecture.md"
+      ],
+      "evidence": [
+        {
+          "type": "command",
+          "command": "docker compose up -d && curl -fsS localhost:8000/health",
+          "exit_code": 0,
+          "output_excerpt": "{\"status\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "id": "T-003",
+      "story": "S-001",
+      "title": "Auth API with lockout and generic errors",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-002"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 4,
+          "unknowns": 1,
+          "security_sensitive": true
+        },
+        "rationale": "files=4:+2, unknowns=1:+1, security_sensitive:+1"
+      },
+      "criteria": [
+        "AC-001.1",
+        "AC-001.3"
+      ],
+      "standards": [
+        "api.md",
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "pytest api/tests/test_auth.py -q",
+          "exit_code": 0,
+          "output_excerpt": "6 passed in 0.84s"
+        }
+      ]
+    },
+    {
+      "id": "T-004",
+      "story": "S-001",
+      "title": "Android sign-in screen",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-003"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 4,
+          "ui_screens": 1,
+          "integrations": 1
+        },
+        "rationale": "files=4:+2, integrations=1:+1, ui_screens=1:+1"
+      },
+      "criteria": [
+        "AC-001.2"
+      ],
+      "standards": [
+        "ui.md",
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "./gradlew :app:testDebugUnitTest --tests *LoginViewModelTest",
+          "exit_code": 0,
+          "output_excerpt": "BUILD SUCCESSFUL, 5 tests completed"
+        }
+      ]
+    },
+    {
+      "id": "T-005",
+      "story": "S-002",
+      "title": "Offline job storage and sync",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-003"
+      ],
+      "complexity": {
+        "score": 8,
+        "factors": {
+          "files": 7,
+          "integrations": 1,
+          "unknowns": 2,
+          "ui_screens": 2
+        },
+        "rationale": "files=7:+3, integrations=1:+1, unknowns=2:+2, ui_screens=2:+1"
+      },
+      "criteria": [
+        "AC-002.1",
+        "AC-002.2"
+      ],
+      "standards": [
+        "api.md",
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "log",
+          "note": "completed through subtasks T-005.1 and T-005.2"
+        }
+      ]
+    },
+    {
+      "id": "T-005.1",
+      "story": "S-002",
+      "title": "Room database and outgoing sync queue",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-003"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 4,
+          "unknowns": 1,
+          "ui_screens": 1
+        },
+        "rationale": "files=4:+2, unknowns=1:+1, ui_screens=1:+1"
+      },
+      "criteria": [
+        "AC-002.1"
+      ],
+      "standards": [
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "./gradlew :app:testDebugUnitTest --tests *SyncQueueTest",
+          "exit_code": 0,
+          "output_excerpt": "BUILD SUCCESSFUL, 6 tests completed"
+        }
+      ],
+      "parent": "T-005"
+    },
+    {
+      "id": "T-005.2",
+      "story": "S-002",
+      "title": "Sync conflict handling (keep both, flag)",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-005.1"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 3,
+          "unknowns": 1,
+          "ui_screens": 1
+        },
+        "rationale": "files=3:+2, unknowns=1:+1, ui_screens=1:+1"
+      },
+      "criteria": [
+        "AC-002.2"
+      ],
+      "standards": [
+        "api.md",
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "./gradlew :app:testDebugUnitTest --tests *SyncConflictTest",
+          "exit_code": 0,
+          "output_excerpt": "BUILD SUCCESSFUL, 4 tests completed"
+        }
+      ],
+      "parent": "T-005"
+    },
+    {
+      "id": "T-006",
+      "story": "S-002",
+      "title": "Photo capture and compression",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-005.1"
+      ],
+      "complexity": {
+        "score": 4,
+        "factors": {
+          "files": 3,
+          "ui_screens": 1
+        },
+        "rationale": "files=3:+2, ui_screens=1:+1"
+      },
+      "criteria": [
+        "AC-002.3"
+      ],
+      "standards": [
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "./gradlew :app:testDebugUnitTest --tests *PhotoCompressorTest",
+          "exit_code": 0,
+          "output_excerpt": "BUILD SUCCESSFUL, 3 tests completed"
+        }
+      ]
+    },
+    {
+      "id": "T-007",
+      "story": "S-003",
+      "title": "Web dashboard: job list with filters",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-003"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 5,
+          "ui_screens": 2,
+          "integrations": 1
+        },
+        "rationale": "files=5:+2, integrations=1:+1, ui_screens=2:+1"
+      },
+      "criteria": [
+        "AC-003.1"
+      ],
+      "standards": [
+        "ui.md",
+        "api.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "npm --prefix web test -- --run",
+          "exit_code": 0,
+          "output_excerpt": "Test Files 7 passed (7)"
+        }
+      ]
+    },
+    {
+      "id": "T-008",
+      "story": "S-003",
+      "title": "Dashboard accessibility pass (keyboard, focus, contrast)",
+      "owner": "ux-ui-designer",
+      "status": "completed",
+      "depends_on": [
+        "T-007"
+      ],
+      "complexity": {
+        "score": 4,
+        "factors": {
+          "files": 4,
+          "ui_screens": 2
+        },
+        "rationale": "files=4:+2, ui_screens=2:+1"
+      },
+      "criteria": [
+        "AC-003.2",
+        "AC-003.3"
+      ],
+      "standards": [
+        "ui.md"
+      ],
+      "evidence": [
+        {
+          "type": "command",
+          "command": "npx playwright test a11y.spec.ts",
+          "exit_code": 0,
+          "output_excerpt": "4 passed (axe: 0 violations)"
+        }
+      ]
+    },
+    {
+      "id": "T-009",
+      "story": "S-004",
+      "title": "Signature capture and PDF embedding",
+      "owner": "developer",
+      "status": "completed",
+      "depends_on": [
+        "T-005.1"
+      ],
+      "complexity": {
+        "score": 5,
+        "factors": {
+          "files": 5,
+          "ui_screens": 1,
+          "integrations": 1
+        },
+        "rationale": "files=5:+2, integrations=1:+1, ui_screens=1:+1"
+      },
+      "criteria": [
+        "AC-004.1"
+      ],
+      "standards": [
+        "api.md",
+        "testing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test",
+          "command": "pytest api/tests/test_pdf.py -q",
+          "exit_code": 0,
+          "output_excerpt": "3 passed in 1.12s"
+        }
+      ]
+    },
+    {
+      "id": "T-010",
+      "story": "S-001",
+      "title": "Fix DEF-001: sign-in error reveals unknown email",
+      "owner": "developer",
+      "status": "in_progress",
+      "depends_on": [
+        "T-004"
+      ],
+      "complexity": {
+        "score": 3,
+        "factors": {
+          "files": 2,
+          "security_sensitive": true
+        },
+        "rationale": "files=2:+1, security_sensitive:+1"
+      },
+      "criteria": [
+        "AC-001.2"
+      ],
+      "standards": [
+        "api.md",
+        "testing.md"
+      ]
+    }
+  ]
+}

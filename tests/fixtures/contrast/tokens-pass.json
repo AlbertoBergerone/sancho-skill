@@ -1,0 +1,34 @@
+{
+  "color": {
+    "neutral": {
+      "0": {
+        "$value": "#ffffff"
+      },
+      "900": {
+        "$value": "#111827"
+      }
+    },
+    "brand": {
+      "primary": {
+        "$value": "#1d4ed8"
+      }
+    },
+    "text": {
+      "default": {
+        "$value": "{color.neutral.900}"
+      }
+    }
+  },
+  "contrast_pairs": [
+    {
+      "fg": "color.text.default",
+      "bg": "color.neutral.0",
+      "usage": "text"
+    },
+    {
+      "fg": "color.brand.primary",
+      "bg": "color.neutral.0",
+      "usage": "ui"
+    }
+  ]
+}

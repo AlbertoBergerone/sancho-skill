@@ -1,0 +1,35 @@
+{
+  "id": "GHSA-x84v-xcm2-53pg",
+  "summary": "Insufficiently Protected Credentials in Requests",
+  "aliases": [
+    "CVE-2018-18074",
+    "PYSEC-2018-28"
+  ],
+  "affected": [
+    {
+      "package": {
+        "ecosystem": "PyPI",
+        "name": "requests"
+      },
+      "ranges": [
+        {
+          "type": "ECOSYSTEM",
+          "events": [
+            {
+              "introduced": "0"
+            },
+            {
+              "fixed": "2.20.0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "database_specific": {
+    "cwe_ids": [
+      "CWE-522"
+    ],
+    "severity": "HIGH"
+  }
+}

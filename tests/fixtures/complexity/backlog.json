@@ -1,0 +1,135 @@
+{
+  "protocol": "sancho/1.0",
+  "requirements": [
+    {
+      "id": "R-001",
+      "kind": "functional",
+      "statement": "s",
+      "priority": "must",
+      "source": "user"
+    }
+  ],
+  "stories": [
+    {
+      "id": "S-001",
+      "title": "S-001",
+      "as_a": "user",
+      "i_want": "x",
+      "so_that": "y",
+      "requirements": [
+        "R-001"
+      ],
+      "priority": "must",
+      "context": "Self-contained context for the executing agent: see ADR-0001 and standards/api.md.",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001.1",
+          "description": "observable outcome",
+          "verification": {
+            "method": "automated_test",
+            "ref": "t"
+          },
+          "status": "not_verified"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "story": "S-001",
+      "title": "task T-001",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 2
+      }
+    },
+    {
+      "id": "T-002",
+      "story": "S-001",
+      "title": "task T-002",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 1,
+        "factors": {
+          "files": 2,
+          "integrations": 1
+        }
+      }
+    },
+    {
+      "id": "T-003",
+      "story": "S-001",
+      "title": "task T-003",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [
+        "T-001",
+        "T-002",
+        "T-004"
+      ],
+      "complexity": {
+        "score": 1,
+        "factors": {
+          "files": 7,
+          "integrations": 3,
+          "unknowns": 1,
+          "ui_screens": 3,
+          "data_migration": true,
+          "security_sensitive": true,
+          "no_existing_tests": true
+        }
+      }
+    },
+    {
+      "id": "T-004",
+      "story": "S-001",
+      "title": "task T-004",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 1,
+        "factors": {
+          "files": 4,
+          "unknowns": 2,
+          "ui_screens": 1,
+          "security_sensitive": true
+        }
+      }
+    },
+    {
+      "id": "T-005",
+      "story": "S-001",
+      "title": "task T-005",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 1,
+        "factors": {
+          "files": 3,
+          "data_migration": true,
+          "unknowns": 2,
+          "no_existing_tests": true
+        }
+      }
+    },
+    {
+      "id": "T-005.1",
+      "story": "S-001",
+      "title": "task T-005.1",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 4
+      },
+      "parent": "T-005"
+    }
+  ]
+}

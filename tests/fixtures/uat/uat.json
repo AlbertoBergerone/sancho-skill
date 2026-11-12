@@ -1,0 +1,55 @@
+{
+  "protocol": "sancho/1.0",
+  "build": "0.3.0",
+  "cases": [
+    {
+      "id": "UAT-001",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.2"
+      ],
+      "title": "Errore con password sbagliata",
+      "platform": "web (Chrome)",
+      "preconditions": [
+        "Esiste l'utente mario@example.com"
+      ],
+      "test_data": [
+        "password: sbagliata123"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Apri la pagina di accesso"
+        },
+        {
+          "n": 2,
+          "action": "Inserisci email e password sbagliata, premi Accedi",
+          "expected": "Compare un messaggio di errore"
+        }
+      ],
+      "expected_result": "Il messaggio non rivela se l'email esiste",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-002",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.3"
+      ],
+      "title": "Accesso su Android",
+      "platform": "android (Pixel 7)",
+      "preconditions": [
+        "App installata"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Apri l'app e accedi"
+        }
+      ],
+      "expected_result": "Si apre la bacheca",
+      "result": "not_tested"
+    }
+  ],
+  "defects": []
+}

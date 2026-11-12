@@ -1,0 +1,91 @@
+{
+  "protocol": "sancho/1.0",
+  "created_at": "2026-10-20T15:30:00+02:00",
+  "phase": "implement",
+  "task": "T-009",
+  "source": "developer",
+  "target": "qa",
+  "objective": "Customer signature captured on Android and embedded in the job PDF",
+  "status": "ready_for_review",
+  "completed_work": [
+    "SignaturePad composable stores the signature as SVG",
+    "POST /jobs/{id}/signature endpoint",
+    "PDF template embeds the signature with date and customer name"
+  ],
+  "verified_findings": [
+    {
+      "statement": "API PDF tests pass",
+      "evidence": [
+        {
+          "type": "test",
+          "command": "pytest api/tests/test_pdf.py -q",
+          "exit_code": 0,
+          "output_excerpt": "3 passed in 1.12s"
+        }
+      ]
+    },
+    {
+      "statement": "Android unit tests for the signature view model pass",
+      "evidence": [
+        {
+          "type": "test",
+          "command": "./gradlew :app:testDebugUnitTest --tests *SignatureViewModelTest",
+          "exit_code": 0,
+          "output_excerpt": "BUILD SUCCESSFUL, 4 tests completed"
+        }
+      ]
+    }
+  ],
+  "unverified_hypotheses": [
+    {
+      "statement": "Signatures drawn on small screens stay legible in the PDF",
+      "how_to_verify": "UAT-005 on a 6-inch device"
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Store the signature as SVG, not PNG",
+      "rationale": "smaller, scales in the PDF",
+      "decided_by": "agent"
+    }
+  ],
+  "modified_artifacts": [
+    {
+      "path": "android/app/src/main/java/app/fieldlog/signature/SignaturePad.kt",
+      "change": "added"
+    },
+    {
+      "path": "api/app/routes/signature.py",
+      "change": "added"
+    },
+    {
+      "path": "api/app/pdf/job_report.html",
+      "change": "modified"
+    }
+  ],
+  "test_results": [
+    {
+      "name": "API PDF tests",
+      "command": "pytest api/tests/test_pdf.py -q",
+      "status": "passed",
+      "executed": true
+    },
+    {
+      "name": "Instrumented UI test on device",
+      "status": "not_run",
+      "executed": false,
+      "summary": "no emulator in this environment; run: ./gradlew connectedDebugAndroidTest"
+    }
+  ],
+  "open_issues": [],
+  "next_actions": [
+    {
+      "action": "Review the diff and re-run test_pdf.py",
+      "owner": "qa"
+    },
+    {
+      "action": "Run UAT-005",
+      "owner": "user"
+    }
+  ]
+}

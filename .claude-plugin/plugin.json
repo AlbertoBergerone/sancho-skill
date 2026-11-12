@@ -1,0 +1,23 @@
+{
+  "name": "sancho",
+  "version": "1.0.0",
+  "description": "Your loyal project companion: a team of seven specialist agents that takes a software project from idea to release through eight gated phases, with guided UAT, security testing (OWASP, CVE, KEV, EPSS) and project standards.",
+  "author": {
+    "name": "Alberto Bergerone",
+    "url": "https://github.com/AlbertoBergerone"
+  },
+  "homepage": "https://github.com/AlbertoBergerone/sancho-skill",
+  "repository": "https://github.com/AlbertoBergerone/sancho-skill",
+  "license": "MIT",
+  "keywords": [
+    "project-management",
+    "multi-agent",
+    "spec-driven",
+    "tdd",
+    "uat",
+    "security",
+    "owasp",
+    "skills"
+  ],
+  "types": "./types/index.d.ts"
+}

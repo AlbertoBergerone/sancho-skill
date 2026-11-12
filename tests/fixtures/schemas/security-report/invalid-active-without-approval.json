@@ -1,0 +1,75 @@
+{
+  "protocol": "sancho/1.0",
+  "generated_at": "2026-10-28T10:00:00+01:00",
+  "scope": {
+    "targets": [
+      "http://localhost:8080"
+    ],
+    "environment": "local",
+    "active_testing": true
+  },
+  "tools": [
+    {
+      "name": "osv-scanner",
+      "status": "run",
+      "command": "osv-scanner -L package-lock.json"
+    },
+    {
+      "name": "zap-baseline",
+      "status": "run",
+      "command": "zap-baseline.py -t http://localhost:8080"
+    },
+    {
+      "name": "mobsf",
+      "status": "not_run",
+      "note": "no Android build yet"
+    }
+  ],
+  "enrichment": {
+    "osv": "run",
+    "nvd": "not_run",
+    "kev": "run",
+    "epss": "run"
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "title": "Prototype pollution in lodash",
+      "category": "sca",
+      "component": {
+        "name": "lodash",
+        "version": "4.17.15",
+        "ecosystem": "npm"
+      },
+      "cve": [
+        "CVE-2020-8203"
+      ],
+      "cwe": [
+        "CWE-1321"
+      ],
+      "cvss": {
+        "version": "3.1",
+        "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+        "base_score": 7.4,
+        "source": "osv"
+      },
+      "epss": {
+        "score": 0.02
+      },
+      "kev": false,
+      "severity": "major",
+      "severity_rationale": "CVSS 7.4 >= 7.0, not in KEV, EPSS < 0.1",
+      "remediation": "Upgrade lodash to 4.17.21",
+      "status": "open"
+    }
+  ],
+  "summary": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "nit": 0,
+    "not_run": [
+      "NVD: no API key and rate limit reached"
+    ]
+  }
+}

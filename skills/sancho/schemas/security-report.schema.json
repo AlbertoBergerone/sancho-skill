@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AlbertoBergerone/sancho-skill/schemas/security-report.schema.json",
+  "title": "Sancho security report",
+  "description": "Findings from threat modeling, SAST, SCA, secrets, container and DAST checks, enriched with OSV, NVD, CISA KEV and FIRST EPSS. Severity uses the single Sancho scale; CVSS/EPSS/KEV are kept alongside.",
+  "type": "object",
+  "required": ["protocol", "generated_at", "scope", "tools", "enrichment", "findings", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": { "type": "string", "pattern": "^sancho/1\\.[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "scope": {
+      "type": "object",
+      "required": ["targets", "environment", "active_testing"],
+      "additionalProperties": false,
+      "properties": {
+        "targets": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "environment": { "enum": ["source-only", "local", "test", "staging"] },
+        "active_testing": { "type": "boolean", "description": "true when DAST, fuzzing or any request against a running target was performed." },
+        "approval": {
+          "type": "object",
+          "required": ["granted_by", "granted_at", "scope"],
+          "additionalProperties": false,
+          "properties": {
+            "granted_by": { "enum": ["user", "operator"] },
+            "granted_at": { "type": "string", "format": "date-time" },
+            "scope": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "active_testing": { "const": true } }, "required": ["active_testing"] },
+          "then": { "required": ["approval"], "properties": { "environment": { "enum": ["local", "test", "staging"] } } }
+        }
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string" },
+          "status": { "enum": ["run", "not_run", "error"] },
+          "command": { "type": "string" },
+          "note": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "run" } }, "required": ["status"] },
+            "then": { "required": ["command"] }
+          }
+        ]
+      }
+    },
+    "enrichment": {
+      "type": "object",
+      "required": ["osv", "nvd", "kev", "epss"],
+      "additionalProperties": false,
+      "properties": {
+        "osv": { "$ref": "#/$defs/source_status" },
+        "nvd": { "$ref": "#/$defs/source_status" },
+        "kev": { "$ref": "#/$defs/source_status" },
+        "epss": { "$ref": "#/$defs/source_status" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "severity", "severity_rationale", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^F-[0-9]{3,}$" },
+          "title": { "type": "string", "minLength": 1 },
+          "category": { "enum": ["sca", "sast", "secrets", "container", "dast", "config", "threat_model", "manual"] },
+          "component": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "version": { "type": "string" },
+              "ecosystem": { "type": "string" },
+              "purl": { "type": "string" }
+            }
+          },
+          "location": { "type": "string" },
+          "advisory": { "type": "string", "description": "Primary advisory id, e.g. GHSA-..., PYSEC-..., OSV id." },
+          "cve": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$" } },
+          "cwe": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^CWE-[0-9]+$" } },
+          "cvss": {
+            "type": "object",
+            "required": ["version", "vector"],
+            "additionalProperties": false,
+            "properties": {
+              "version": { "enum": ["2.0", "3.0", "3.1", "4.0"] },
+              "vector": { "type": "string", "minLength": 1 },
+              "base_score": { "type": "number", "minimum": 0, "maximum": 10 },
+              "source": { "type": "string" }
+            }
+          },
+          "epss": {
+            "type": "object",
+            "required": ["score"],
+            "additionalProperties": false,
+            "properties": {
+              "score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "percentile": { "type": "number", "minimum": 0, "maximum": 1 },
+              "date": { "type": "string" }
+            }
+          },
+          "kev": { "type": "boolean" },
+          "fixed_versions": { "type": "array", "items": { "type": "string" } },
+          "severity": { "enum": ["blocker", "major", "minor", "nit"] },
+          "severity_rationale": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "array", "items": { "type": "object" } },
+          "remediation": { "type": "string" },
+          "status": { "enum": ["open", "fixed", "accepted_risk", "false_positive", "not_verified"] },
+          "accepted_by": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "accepted_risk" } }, "required": ["status"] },
+            "then": { "required": ["accepted_by"] }
+          },
+          {
+            "if": { "properties": { "category": { "const": "dast" } }, "required": ["category"] },
+            "then": { "required": ["location"] }
+          }
+        ]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["blocker", "major", "minor", "nit"],
+      "additionalProperties": false,
+      "properties": {
+        "blocker": { "type": "integer", "minimum": 0 },
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 },
+        "nit": { "type": "integer", "minimum": 0 },
+        "not_run": { "type": "array", "items": { "type": "string" }, "description": "Checks that were planned but not executed, with the reason." }
+      }
+    }
+  },
+  "$defs": {
+    "source_status": { "enum": ["run", "partial", "not_run", "error"] }
+  }
+}

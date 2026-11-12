@@ -1,0 +1,19 @@
+{
+  "name": "sancho",
+  "owner": {
+    "name": "Alberto Bergerone",
+    "url": "https://github.com/AlbertoBergerone"
+  },
+  "metadata": {
+    "description": "Sancho - project delivery with a team of specialist agents."
+  },
+  "plugins": [
+    {
+      "name": "sancho",
+      "source": "./",
+      "description": "Eight gated phases, seven specialist agents, guided UAT, security testing and project standards.",
+      "version": "1.0.0",
+      "license": "MIT"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+﻿ID;Story;Criteri;Titolo;Piattaforma;Precondizioni;Dati di test;Passi;Risultato atteso;Esito;Eseguito da;Eseguito il;Note;Difetti
+UAT-001;S-001;AC-001.2;Wrong password shows a generic error;android (Samsung Galaxy A54, Android 14);"FieldLog is installed from the test build
+The account tecnico1@example.com exists";"email: tecnico1@example.com
+wrong password: Sbagliata!2026
+unknown email: nessuno@example.com";"1. Open FieldLog
+2. Type the email tecnico1@example.com and the wrong password, tap Sign in -> A message says the email or password is not correct
+3. Type the unknown email nessuno@example.com and any password, tap Sign in -> Exactly the same message as in step 2";"Both attempts show the same message; nothing reveals whether the email is registered";fallito;Danilo;2026-10-22T11:20:00+02:00;Step 3 shows 'User not found';DEF-001
+UAT-002;S-002;AC-002.1;Job logged offline is synced when back online;android (Samsung Galaxy A54, Android 14) + web (Chrome);"Signed in as tecnico1@example.com
+Back-office dashboard open in Chrome as ufficio@example.com";"customer: Condominio Aurora, Via Roma 10
+activity: monthly inspection, 45 minutes
+one photo";"1. Turn on airplane mode on the phone
+2. Tap New job, fill in the test data, add a photo, tap Save -> The job appears in the list with a 'waiting to sync' badge
+3. Turn off airplane mode and wait one minute
+4. Refresh the dashboard in Chrome -> The job is listed with the photo";The job saved offline appears on the dashboard within one minute of reconnecting, with its photo;superato;Danilo;2026-10-22T11:45:00+02:00;;
+UAT-003;S-003;AC-003.1;Filter jobs by date and technician;web (Chrome 130, desktop);"Signed in as ufficio@example.com
+Test data loaded: 30 jobs by 3 technicians over October";"date range: 1-15 October 2026
+technician: Tecnico Uno";"1. Open Jobs
+2. Set the date range 1-15 October 2026
+3. Choose the technician 'Tecnico Uno' -> The counter above the list updates";Only Tecnico Uno's jobs between 1 and 15 October are listed (8 jobs in the test data);superato;Danilo;2026-10-22T12:05:00+02:00;;
+UAT-004;S-003;AC-003.2;Dashboard usable with the keyboard only;web (Edge, desktop);"Signed in as ufficio@example.com
+Mouse or touchpad not used during the test";;"1. Press Tab repeatedly from the top of the Jobs page -> A clearly visible outline moves through filters, list and buttons in reading order
+2. Reach the date filter and set a range with the keyboard only
+3. Open a job with Enter and close it with Esc";Every action is possible without a mouse and the focus is always visible;non eseguito;;;;
+UAT-005;S-004;AC-004.1;Customer signature appears in the PDF;android (Samsung Galaxy A54) + web (Chrome);A synced job exists for Condominio Aurora;;"1. On the phone open the job and tap Customer signature
+2. Hand the phone to the customer, let them sign, tap Confirm
+3. On the dashboard open the job and download the PDF -> The PDF opens";The PDF shows the signature in the signature box with date and customer name;non eseguito;;;;

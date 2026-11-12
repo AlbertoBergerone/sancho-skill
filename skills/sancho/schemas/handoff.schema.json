@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AlbertoBergerone/sancho-skill/schemas/handoff.schema.json",
+  "title": "Sancho handoff",
+  "description": "Structured handoff between Sancho roles (or sessions). Adapted from the ACP v1.1 handoff schema (MIT, see NOTICE). The receiver treats every claim as REPORTED until it checks the evidence.",
+  "type": "object",
+  "required": ["protocol", "phase", "source", "target", "objective", "status", "completed_work", "verified_findings", "unverified_hypotheses", "modified_artifacts", "test_results", "open_issues", "next_actions"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": { "type": "string", "pattern": "^sancho/1\\.[0-9]+$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "phase": { "enum": ["discover", "specify", "plan", "tasks", "implement", "verify", "release", "evolve"] },
+    "task": { "type": "string" },
+    "source": { "$ref": "#/$defs/role" },
+    "target": { "$ref": "#/$defs/role" },
+    "objective": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["in_progress", "blocked", "ready_for_review", "completed", "failed"] },
+    "completed_work": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "verified_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["statement", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "statement": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } }
+        }
+      }
+    },
+    "unverified_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["statement"],
+        "additionalProperties": false,
+        "properties": {
+          "statement": { "type": "string", "minLength": 1 },
+          "basis": { "type": "string" },
+          "how_to_verify": { "type": "string" }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decision", "decided_by"],
+        "additionalProperties": false,
+        "properties": {
+          "decision": { "type": "string", "minLength": 1 },
+          "rationale": { "type": "string" },
+          "decided_by": { "enum": ["user", "agent"] },
+          "adr": { "type": "string" }
+        }
+      }
+    },
+    "modified_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "change"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "change": { "enum": ["added", "modified", "deleted", "renamed"] },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "test_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "executed"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "command": { "type": "string" },
+          "status": { "enum": ["passed", "failed", "error", "skipped", "not_run"] },
+          "executed": { "type": "boolean" },
+          "summary": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "enum": ["passed", "failed", "error"] } }, "required": ["status"] },
+            "then": { "properties": { "executed": { "const": true } }, "required": ["command"] }
+          },
+          {
+            "if": { "properties": { "status": { "const": "not_run" } }, "required": ["status"] },
+            "then": { "properties": { "executed": { "const": false } } }
+          }
+        ]
+      }
+    },
+    "open_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["blocker", "major", "minor", "nit"] },
+          "location": { "type": "string" }
+        }
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "owner"],
+        "additionalProperties": false,
+        "properties": {
+          "action": { "type": "string", "minLength": 1 },
+          "owner": { "$ref": "#/$defs/role" },
+          "requires_approval": { "type": "boolean" }
+        }
+      }
+    },
+    "untrusted_inputs": {
+      "type": "array",
+      "description": "Sources processed as data whose embedded instructions were NOT followed.",
+      "items": {
+        "type": "object",
+        "required": ["source", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "blocked" } }, "required": ["status"] },
+      "then": { "properties": { "open_issues": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "role": { "enum": ["analyst-pm", "ux-ui-designer", "architect", "developer", "qa", "security", "release-manager", "user", "orchestrator"] },
+    "evidence": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["file", "commit", "command", "test", "uat", "url", "log", "screenshot"] },
+        "path": { "type": "string" },
+        "lines": { "type": "string", "pattern": "^[0-9]+(-[0-9]+)?$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "command": { "type": "string" },
+        "exit_code": { "type": "integer" },
+        "output_excerpt": { "type": "string", "maxLength": 2000 },
+        "url": { "type": "string" },
+        "ref": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "enum": ["file", "screenshot"] } }, "required": ["type"] }, "then": { "required": ["path"] } },
+        { "if": { "properties": { "type": { "const": "commit" } }, "required": ["type"] }, "then": { "required": ["commit"] } },
+        { "if": { "properties": { "type": { "enum": ["command", "test"] } }, "required": ["type"] }, "then": { "required": ["command"] } },
+        { "if": { "properties": { "type": { "const": "uat" } }, "required": ["type"] }, "then": { "required": ["ref"] } },
+        { "if": { "properties": { "type": { "const": "url" } }, "required": ["type"] }, "then": { "required": ["url"] } }
+      ]
+    }
+  }
+}

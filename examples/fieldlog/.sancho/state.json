@@ -1,0 +1,409 @@
+{
+  "protocol": "sancho/1.0",
+  "project": {
+    "name": "FieldLog",
+    "summary": "Job logging for field technicians (Android, offline) with a web back-office.",
+    "level": "L2",
+    "platforms": [
+      "android",
+      "web",
+      "api"
+    ],
+    "repository": "https://example.invalid/fieldlog"
+  },
+  "created_at": "2026-10-01T09:00:00+02:00",
+  "updated_at": "2026-10-23T17:40:00+02:00",
+  "current_phase": "verify",
+  "phases": {
+    "discover": {
+      "status": "approved",
+      "lead": "analyst-pm",
+      "started_at": "2026-10-01T09:00:00+02:00",
+      "completed_at": "2026-10-01T18:00:00+02:00",
+      "gate": {
+        "checklist": [
+          {
+            "id": "DIS-1",
+            "item": "constitution.md written: purpose, principles, non-goals",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-2",
+            "item": "Personas and primary use cases described",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-3",
+            "item": "Target platforms confirmed by the user",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-4",
+            "item": "Constraints recorded: budget, timeline, hosting, team skills",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-5",
+            "item": "Personal data and GDPR impact assessed (data categories, legal basis, retention)",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-6",
+            "item": "Accessibility (WCAG 2.2 AA default) and languages/i18n targets set",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-7",
+            "item": "Risk level L0-L3 assigned and confirmed by the user",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-8",
+            "item": "Product name chosen by the user (or n/a)",
+            "result": "pass"
+          },
+          {
+            "id": "DIS-9",
+            "item": "L0-L1 only: lightweight stack decision recorded (else n/a, decided in PLAN)",
+            "result": "n/a",
+            "note": "L2: stack decided in PLAN"
+          }
+        ],
+        "coherence": "n/a",
+        "approved_at": "2026-10-01T18:00:00+02:00"
+      }
+    },
+    "specify": {
+      "status": "approved",
+      "lead": "analyst-pm",
+      "started_at": "2026-10-02T09:00:00+02:00",
+      "completed_at": "2026-10-03T18:00:00+02:00",
+      "gate": {
+        "checklist": [
+          {
+            "id": "SPE-1",
+            "item": "Every requirement has id, kind, MoSCoW priority and source",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-2",
+            "item": "Every story links at least one requirement and has self-contained context",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-3",
+            "item": "Every acceptance criterion is observable and has a verification method",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-4",
+            "item": "MVP scope explicit: IN and OUT lists",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-5",
+            "item": "Non-functional requirements covered: performance, security, privacy, accessibility",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-6",
+            "item": "Open questions resolved, or listed and marked HYPOTHESIS",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-7",
+            "item": "No invented requirements: derived ones are marked source=derived and confirmed",
+            "result": "pass"
+          },
+          {
+            "id": "SPE-8",
+            "item": "coherence_check.py --stage spec passes",
+            "result": "pass"
+          }
+        ],
+        "coherence": "pass",
+        "approved_at": "2026-10-03T18:00:00+02:00"
+      }
+    },
+    "plan": {
+      "status": "approved",
+      "lead": "architect",
+      "started_at": "2026-10-05T09:00:00+02:00",
+      "completed_at": "2026-10-07T18:00:00+02:00",
+      "gate": {
+        "checklist": [
+          {
+            "id": "PLA-1",
+            "item": "Stack decision matrix with recommendation + 2 alternatives per area; user decision recorded as ADR",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-2",
+            "item": "Architecture: components, boundaries, data flow (diagram)",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-3",
+            "item": "Container decision recorded as ADR (container setup or reasons for none)",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-4",
+            "item": "Data model, integrations and external services listed",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-5",
+            "item": "STRIDE threat model with mitigations mapped to requirements or tasks",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-6",
+            "item": "Brand: design tokens pass contrast_check.py, logo chosen by the user (or n/a)",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-7",
+            "item": "Wireframes for key flows on each target platform (or n/a for non-UI projects)",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-8",
+            "item": "Environments, branching, versioning (SemVer) and CI strategy defined",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-9",
+            "item": "Licenses of chosen dependencies compatible with the project license",
+            "result": "pass"
+          },
+          {
+            "id": "PLA-10",
+            "item": "Risk register: probability x impact, mitigation, owner",
+            "result": "pass"
+          }
+        ],
+        "coherence": "pass",
+        "approved_at": "2026-10-07T18:00:00+02:00"
+      }
+    },
+    "tasks": {
+      "status": "approved",
+      "lead": "analyst-pm",
+      "started_at": "2026-10-08T09:00:00+02:00",
+      "completed_at": "2026-10-08T18:00:00+02:00",
+      "gate": {
+        "checklist": [
+          {
+            "id": "TAS-1",
+            "item": "Every story (except wont) has at least one task with an owner",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-2",
+            "item": "Dependencies valid and acyclic",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-3",
+            "item": "Complexity scored; tasks above threshold split into subtasks",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-4",
+            "item": "Tasks reference the standards to load",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-5",
+            "item": "UAT case for every criterion verified by UAT; steps written for a non-technical tester",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-6",
+            "item": "coherence_check.py --stage tasks passes",
+            "result": "pass"
+          },
+          {
+            "id": "TAS-7",
+            "item": "Execution order / milestones agreed with the user",
+            "result": "pass"
+          }
+        ],
+        "coherence": "pass",
+        "approved_at": "2026-10-08T18:00:00+02:00"
+      }
+    },
+    "implement": {
+      "status": "approved",
+      "lead": "developer",
+      "started_at": "2026-10-09T09:00:00+02:00",
+      "completed_at": "2026-10-20T18:00:00+02:00",
+      "gate": {
+        "checklist": [
+          {
+            "id": "IMP-1",
+            "item": "All must-have tasks completed with evidence",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-2",
+            "item": "TDD: failing test written before each new behavior or bug fix",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-3",
+            "item": "CI green: lint, typecheck, tests (command output recorded)",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-4",
+            "item": "No undisclosed out-of-scope changes (guardrail G7)",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-5",
+            "item": "Project standards applied; deviations recorded",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-6",
+            "item": "No secrets in the repository (gitleaks or equivalent check)",
+            "result": "pass"
+          },
+          {
+            "id": "IMP-7",
+            "item": "Handoff to QA for each completed story",
+            "result": "pass"
+          }
+        ],
+        "coherence": "pass",
+        "approved_at": "2026-10-20T18:00:00+02:00"
+      }
+    },
+    "verify": {
+      "status": "in_progress",
+      "lead": "qa",
+      "started_at": "2026-10-21T09:00:00+02:00"
+    },
+    "release": {
+      "status": "not_started",
+      "lead": "release-manager"
+    },
+    "evolve": {
+      "status": "not_started",
+      "lead": "release-manager"
+    }
+  },
+  "stack": [
+    {
+      "area": "backend",
+      "choice": "Python + FastAPI",
+      "version": "3.12 / 0.11x",
+      "decided_by": "user",
+      "adr": "docs/adr/0001-stack.md"
+    },
+    {
+      "area": "database",
+      "choice": "PostgreSQL",
+      "version": "16",
+      "decided_by": "user",
+      "adr": "docs/adr/0001-stack.md"
+    },
+    {
+      "area": "web",
+      "choice": "React + TypeScript (Vite)",
+      "decided_by": "user",
+      "adr": "docs/adr/0001-stack.md"
+    },
+    {
+      "area": "android",
+      "choice": "Kotlin + Jetpack Compose, Room for offline storage",
+      "decided_by": "user",
+      "adr": "docs/adr/0001-stack.md"
+    },
+    {
+      "area": "containers",
+      "choice": "Docker multi-stage image for the API, docker compose for development",
+      "decided_by": "user",
+      "adr": "docs/adr/0002-containers.md"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D-001",
+      "summary": "Risk level L2: personal data of customers, two platforms",
+      "decided_by": "user",
+      "date": "2026-10-01"
+    },
+    {
+      "id": "D-002",
+      "summary": "Product name FieldLog (from 4 proposals)",
+      "decided_by": "user",
+      "date": "2026-10-01"
+    },
+    {
+      "id": "D-003",
+      "summary": "Customer signature is should-have, kept in MVP",
+      "decided_by": "user",
+      "date": "2026-10-03"
+    },
+    {
+      "id": "D-004",
+      "summary": "Native Android (Kotlin) instead of Flutter: team knows Kotlin, offline storage maturity",
+      "decided_by": "user",
+      "date": "2026-10-06",
+      "adr": "docs/adr/0001-stack.md"
+    },
+    {
+      "id": "D-005",
+      "summary": "Containerize the API and database for dev/prod parity",
+      "decided_by": "user",
+      "date": "2026-10-06",
+      "adr": "docs/adr/0002-containers.md"
+    },
+    {
+      "id": "D-006",
+      "summary": "Palette 'Steel & Signal' and logo direction B",
+      "decided_by": "user",
+      "date": "2026-10-07"
+    }
+  ],
+  "brand": {
+    "tokens_file": "design/tokens.json",
+    "logo_files": [
+      "design/logo.svg"
+    ],
+    "approved": true
+  },
+  "artifacts": {
+    "constitution": "docs/constitution.md",
+    "spec": "docs/spec.md",
+    "plan": "docs/plan.md",
+    "adr_dir": "docs/adr",
+    "backlog": ".sancho/backlog.json",
+    "uat": ".sancho/uat.json",
+    "security_report": "docs/security/security-report.json",
+    "standards_dir": ".sancho/standards",
+    "handoffs_dir": ".sancho/handoffs"
+  },
+  "approvals": [
+    {
+      "action": "OWASP ZAP baseline scan",
+      "scope": "http://localhost:8000 (docker compose, test data only)",
+      "granted_by": "user",
+      "granted_at": "2026-10-22T10:05:00+02:00"
+    }
+  ],
+  "checkpoints": [
+    {
+      "at": "2026-10-23T17:40:00+02:00",
+      "file": ".sancho/checkpoints/2026-10-23-1740.md"
+    }
+  ],
+  "settings": {
+    "language": "it",
+    "complexity_threshold": 7,
+    "tdd": true
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "protocol": "sancho/1.0",
+  "build": "0.9.0-rc.1 (commit 4f2a9c1)",
+  "cases": [
+    {
+      "id": "UAT-001",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.2"
+      ],
+      "title": "Wrong password shows a generic error",
+      "platform": "android (Samsung Galaxy A54, Android 14)",
+      "preconditions": [
+        "FieldLog is installed from the test build",
+        "The account tecnico1@example.com exists"
+      ],
+      "test_data": [
+        "email: tecnico1@example.com",
+        "wrong password: Sbagliata!2026",
+        "unknown email: nessuno@example.com"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Open FieldLog"
+        },
+        {
+          "n": 2,
+          "action": "Type the email tecnico1@example.com and the wrong password, tap Sign in",
+          "expected": "A message says the email or password is not correct"
+        },
+        {
+          "n": 3,
+          "action": "Type the unknown email nessuno@example.com and any password, tap Sign in",
+          "expected": "Exactly the same message as in step 2"
+        }
+      ],
+      "expected_result": "Both attempts show the same message; nothing reveals whether the email is registered",
+      "result": "fail",
+      "executed_by": "Danilo",
+      "executed_at": "2026-10-22T11:20:00+02:00",
+      "notes": "Step 3 shows 'User not found'",
+      "defects": [
+        "DEF-001"
+      ]
+    },
+    {
+      "id": "UAT-002",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Job logged offline is synced when back online",
+      "platform": "android (Samsung Galaxy A54, Android 14) + web (Chrome)",
+      "preconditions": [
+        "Signed in as tecnico1@example.com",
+        "Back-office dashboard open in Chrome as ufficio@example.com"
+      ],
+      "test_data": [
+        "customer: Condominio Aurora, Via Roma 10",
+        "activity: monthly inspection, 45 minutes",
+        "one photo"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Turn on airplane mode on the phone"
+        },
+        {
+          "n": 2,
+          "action": "Tap New job, fill in the test data, add a photo, tap Save",
+          "expected": "The job appears in the list with a 'waiting to sync' badge"
+        },
+        {
+          "n": 3,
+          "action": "Turn off airplane mode and wait one minute"
+        },
+        {
+          "n": 4,
+          "action": "Refresh the dashboard in Chrome",
+          "expected": "The job is listed with the photo"
+        }
+      ],
+      "expected_result": "The job saved offline appears on the dashboard within one minute of reconnecting, with its photo",
+      "result": "pass",
+      "executed_by": "Danilo",
+      "executed_at": "2026-10-22T11:45:00+02:00"
+    },
+    {
+      "id": "UAT-003",
+      "story": "S-003",
+      "criteria": [
+        "AC-003.1"
+      ],
+      "title": "Filter jobs by date and technician",
+      "platform": "web (Chrome 130, desktop)",
+      "preconditions": [
+        "Signed in as ufficio@example.com",
+        "Test data loaded: 30 jobs by 3 technicians over October"
+      ],
+      "test_data": [
+        "date range: 1-15 October 2026",
+        "technician: Tecnico Uno"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Open Jobs"
+        },
+        {
+          "n": 2,
+          "action": "Set the date range 1-15 October 2026"
+        },
+        {
+          "n": 3,
+          "action": "Choose the technician 'Tecnico Uno'",
+          "expected": "The counter above the list updates"
+        }
+      ],
+      "expected_result": "Only Tecnico Uno's jobs between 1 and 15 October are listed (8 jobs in the test data)",
+      "result": "pass",
+      "executed_by": "Danilo",
+      "executed_at": "2026-10-22T12:05:00+02:00"
+    },
+    {
+      "id": "UAT-004",
+      "story": "S-003",
+      "criteria": [
+        "AC-003.2"
+      ],
+      "title": "Dashboard usable with the keyboard only",
+      "platform": "web (Edge, desktop)",
+      "preconditions": [
+        "Signed in as ufficio@example.com",
+        "Mouse or touchpad not used during the test"
+      ],
+      "test_data": [],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Press Tab repeatedly from the top of the Jobs page",
+          "expected": "A clearly visible outline moves through filters, list and buttons in reading order"
+        },
+        {
+          "n": 2,
+          "action": "Reach the date filter and set a range with the keyboard only"
+        },
+        {
+          "n": 3,
+          "action": "Open a job with Enter and close it with Esc"
+        }
+      ],
+      "expected_result": "Every action is possible without a mouse and the focus is always visible",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-005",
+      "story": "S-004",
+      "criteria": [
+        "AC-004.1"
+      ],
+      "title": "Customer signature appears in the PDF",
+      "platform": "android (Samsung Galaxy A54) + web (Chrome)",
+      "preconditions": [
+        "A synced job exists for Condominio Aurora"
+      ],
+      "test_data": [],
+      "steps": [
+        {
+          "n": 1,
+          "action": "On the phone open the job and tap Customer signature"
+        },
+        {
+          "n": 2,
+          "action": "Hand the phone to the customer, let them sign, tap Confirm"
+        },
+        {
+          "n": 3,
+          "action": "On the dashboard open the job and download the PDF",
+          "expected": "The PDF opens"
+        }
+      ],
+      "expected_result": "The PDF shows the signature in the signature box with date and customer name",
+      "result": "not_tested"
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-001",
+      "uat": "UAT-001",
+      "severity": "major",
+      "description": "Sign-in error reveals that an email is not registered ('User not found'), enabling account enumeration (TM-01)",
+      "steps_to_reproduce": "UAT-001 step 3",
+      "status": "open",
+      "task": "T-010"
+    }
+  ]
+}

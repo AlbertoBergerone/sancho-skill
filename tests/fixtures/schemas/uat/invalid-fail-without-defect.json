@@ -1,0 +1,44 @@
+{
+  "protocol": "sancho/1.0",
+  "cases": [
+    {
+      "id": "UAT-001",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.2"
+      ],
+      "title": "Wrong password",
+      "platform": "web (Chrome)",
+      "preconditions": [
+        "A user exists: mario@example.com"
+      ],
+      "test_data": [
+        "password: wrong-pass"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Open the login page"
+        },
+        {
+          "n": 2,
+          "action": "Type the email and a wrong password, press Sign in",
+          "expected": "An error message appears"
+        }
+      ],
+      "expected_result": "The message says the credentials are wrong without revealing which field",
+      "result": "fail",
+      "executed_by": "Danilo",
+      "executed_at": "2026-10-28T10:00:00+01:00"
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-001",
+      "uat": "UAT-001",
+      "severity": "major",
+      "description": "Message reveals the email exists",
+      "status": "open"
+    }
+  ]
+}

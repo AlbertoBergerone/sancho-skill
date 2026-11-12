@@ -1,0 +1,30 @@
+{
+  "color": {
+    "bg": "#ffffff",
+    "muted": "#9ca3af",
+    "accent": "#fde047",
+    "overlay": "#00000080"
+  },
+  "contrast_pairs": [
+    {
+      "fg": "color.muted",
+      "bg": "color.bg",
+      "usage": "text"
+    },
+    {
+      "fg": "color.muted",
+      "bg": "color.bg",
+      "usage": "large-text"
+    },
+    {
+      "fg": "color.accent",
+      "bg": "color.bg",
+      "usage": "ui"
+    },
+    {
+      "fg": "color.overlay",
+      "bg": "color.bg",
+      "usage": "text"
+    }
+  ]
+}

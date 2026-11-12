@@ -1,0 +1,121 @@
+{
+  "protocol": "sancho/1.0",
+  "requirements": [
+    {
+      "id": "R-001",
+      "kind": "functional",
+      "statement": "s",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-002",
+      "kind": "functional",
+      "statement": "s",
+      "priority": "must",
+      "source": "user"
+    },
+    {
+      "id": "R-003",
+      "kind": "functional",
+      "statement": "s",
+      "priority": "wont",
+      "source": "user"
+    }
+  ],
+  "stories": [
+    {
+      "id": "S-001",
+      "title": "S-001",
+      "as_a": "user",
+      "i_want": "x",
+      "so_that": "y",
+      "requirements": [
+        "R-001"
+      ],
+      "priority": "must",
+      "context": "Self-contained context for the executing agent: see ADR-0001 and standards/api.md.",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001.1",
+          "description": "observable outcome",
+          "verification": {
+            "method": "automated_test",
+            "ref": "tests/a.test.ts"
+          },
+          "status": "not_verified"
+        },
+        {
+          "id": "AC-001.2",
+          "description": "observable outcome",
+          "verification": {
+            "method": "uat"
+          },
+          "status": "not_verified"
+        }
+      ]
+    },
+    {
+      "id": "S-002",
+      "title": "S-002",
+      "as_a": "user",
+      "i_want": "x",
+      "so_that": "y",
+      "requirements": [
+        "R-002"
+      ],
+      "priority": "must",
+      "context": "Self-contained context for the executing agent: see ADR-0001 and standards/api.md.",
+      "acceptance_criteria": [
+        {
+          "id": "AC-002.1",
+          "description": "observable outcome",
+          "verification": {
+            "method": "static_check",
+            "ref": "npm run lint"
+          },
+          "status": "not_verified"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "story": "S-001",
+      "title": "task T-001",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [],
+      "complexity": {
+        "score": 3
+      }
+    },
+    {
+      "id": "T-002",
+      "story": "S-001",
+      "title": "task T-002",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [
+        "T-001"
+      ],
+      "complexity": {
+        "score": 3
+      }
+    },
+    {
+      "id": "T-003",
+      "story": "S-002",
+      "title": "task T-003",
+      "owner": "developer",
+      "status": "pending",
+      "depends_on": [
+        "T-001"
+      ],
+      "complexity": {
+        "score": 3
+      }
+    }
+  ]
+}
