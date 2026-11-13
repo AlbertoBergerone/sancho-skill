@@ -95,6 +95,10 @@ For people who do not use Claude Code. Upload `sancho.zip` once (see the [instal
 
 Claude apps (web, desktop, mobile) and Claude Code with the skill only: `/sancho <command>` with a space, for example `/sancho status`, `/sancho verify uat`. Or just write "sancho, what's next?".
 
+## As a team
+
+Several people on the same project, each in their own clone: with `.sancho/team.json` everyone gets their own next step, claims tasks, UAT cases and defects, sees what the others did after a pull, and gates have named approvers. Sancho's state never conflicts in merges. See the [usage guide](docs/guide.en.md), chapter 11.
+
 ## Panel (plugin only)
 
 With the plugin, the Claude app (Code tab) and Claude Code also get the Sancho panel. It needs nothing from you and appears only in folders with a Sancho project:

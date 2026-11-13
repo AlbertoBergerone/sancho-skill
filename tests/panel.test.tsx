@@ -23,7 +23,7 @@ const PANE = {
 const BAND = {
   plugin: 'sancho',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 5 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 5 }, view: {} },
 } as const
 
 function engine(on: On, payload: unknown) {
@@ -81,6 +81,52 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await pane.unmount()
     const band = await $.ui.mount({ ...BAND, surface })
     expect((await band.find({ type: 'Text' }))?.text).toBe('engine')
+    await band.unmount()
+  })
+}
+
+const TEAM = {
+  ...FIELDLOG,
+  status: {
+    ...FIELDLOG.status,
+    next: { who: 'luca', member: 'luca', mine: true, phase: 'verify', action: 'Continue T-007 [S-002]: offline login.' },
+    team: {
+      me: 'luca', identity: 'git email luca@example.com', members: ['danilo', 'luca', 'sara'],
+      claims: { 'T-007': { by: 'luca', at: '2026-11-13T10:00:00+01:00', status: 'in_progress' }, 'UAT-004': { by: 'sara', at: '2026-11-13T10:05:00+01:00', status: null } },
+      conflicts: [{ item: 'T-009', lost: 'sara', won: 'danilo', at: 'x', won_at: 'y' }], stale: [], renamed: [],
+    },
+  },
+  since: {
+    first_run: false, from: 'abc', to: 'def', commits: [{ sha: '1', author: 'danilo', subject: 'review' }],
+    by_member: { danilo: ['asked for changes on T-007: add the offline test'] },
+    mine: ['danilo asked for changes on T-007: add the offline test'], phases: [], files: [],
+  },
+}
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`team mode: squad, news for you, mark as seen (${surface})`, async ($, on) => {
+    const calls: string[][] = []
+    on('process.run', (_, e) => {
+      calls.push(e.argv as string[])
+      return { value: { exitCode: 0, stdout: JSON.stringify(TEAM), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('session.cwd', () => ({ value: 'C:/progetto' }))
+    on('clock.now', () => ({ value: 0 }))
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await $.command.run(OPEN)
+    expect(await ui.find({ type: 'Text', text: /SQUADRA/ })).toBeDefined()
+    const texts = (await ui.findAll({ type: 'Text' })).map(x => x.text).join('\n')
+    expect(texts).toContain('T-007 in_progress')
+    expect(texts).toContain('UAT-004')
+    expect(texts).toContain('resta a danilo')
+    expect(texts).toContain('danilo asked for changes on T-007')
+    await ui.press({ key: 'mark-seen' })
+    expect(calls.some(argv => argv.includes('--mark-seen'))).toBe(true)
+    await ui.unmount()
+    const band = await $.ui.mount({ ...BAND, surface })
+    const line = (await band.findAll({ type: 'Text' })).map(x => x.text).join(' ')
+    expect(line).toContain('1 novità per te')
     await band.unmount()
   })
 }

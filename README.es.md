@@ -95,6 +95,10 @@ Para quien no usa Claude Code. Sube `sancho.zip` una vez (consulta la [guía de 
 
 Apps de Claude (web, escritorio, móvil) y Claude Code solo con la skill: `/sancho <comando>` con espacio, por ejemplo `/sancho status`, `/sancho verify uat`. O simplemente escribe "sancho, ¿cuál es el siguiente paso?".
 
+## En equipo
+
+Varias personas en el mismo proyecto, cada una con su copia: con `.sancho/team.json` cada uno tiene su siguiente paso, reserva tareas, casos UAT y defectos, ve lo que hicieron los demás tras un pull, y los gates tienen aprobadores con nombre. El estado de Sancho nunca entra en conflicto en los merges. Consulta la [guía de uso](docs/guide.es.md), capítulo 11.
+
 ## Panel (solo plugin)
 
 Con el plugin, la app de Claude (pestaña Code) y Claude Code muestran también el panel de Sancho. No tienes que hacer nada, y aparece solo en carpetas con un proyecto Sancho:

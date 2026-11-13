@@ -117,7 +117,27 @@ Cada fallo se convierte en un defecto con una gravedad, una tarea de corrección
 
 Sancho diseña los logos en SVG y las paletas como design tokens con contraste verificado. Para fotos o ilustraciones complejas puede usar un servicio de generación de imágenes que hayas configurado (clave API en una variable de entorno, o un servidor MCP). Si no, te entrega un prompt listo para pegar en la herramienta que prefieras.
 
-## 11. Preguntas frecuentes
+## 11. Trabajar en equipo
+
+Sancho funciona también con varias personas en el mismo proyecto, cada una con su propia copia del repositorio. El modo equipo se activa cuando existe `.sancho/team.json`; sin él, todo sigue como para una sola persona.
+
+**Preparar el equipo (una vez, el coordinador).** Pide "sancho, prepara el equipo": Sancho propone los miembros a partir de los autores de los commits y los añade con nombre, email de git y roles (por ejemplo `developer`, `qa`). El primer coordinador abre y cierra las fases. Opcional: en `team.json` decidís quién aprueba cada gate y cuántas aprobaciones hacen falta. Haz commit de `team.json` y `.gitattributes`.
+
+**Cada día.**
+1. `git pull`, después "sancho, ¿qué ha cambiado?": ves lo que han hecho los demás, primero lo que te afecta. Con el hook ("sancho, instala el hook") lo ves solo después de cada pull.
+2. "sancho, ¿siguiente paso?": el paso es **tuyo**, no del proyecto. Si no hay nada para ti, Sancho dice quién está haciendo qué.
+3. Reserva una tarea, un caso UAT o un defecto antes de trabajar en él: "sancho, me quedo con T-007". Sancho registra la reserva y propone hacer commit y push enseguida, para que los demás la vean.
+4. Al terminar una tarea la marcas lista para revisión; la aprueba otro miembro con el rol `qa` (cuatro ojos).
+
+**Gates.** El coordinador envía el resumen; cada aprobador aprueba desde su propia sesión. El gate se cierra cuando hay suficientes aprobaciones. Después de un gate el coordinador compacta el registro ("sancho, compacta el registro").
+
+**Si algo se cruza.** Dos reservas de la misma tarea: gana la primera y se avisa a la otra persona. Dos defectos con el mismo número: el segundo se renumera. Dos historias o tareas con el mismo id tras un merge: "sancho, renumera los id duplicados".
+
+**Límites.** Sancho ve el trabajo de los demás solo después de push y pull, y ordena los eventos con el reloj de los ordenadores. La identidad viene del email de git: sirve para coordinarse, no para proteger. En la app de Claude (chat) el modo equipo no sirve: allí no hay git.
+
+En el plugin, el panel muestra la sección **Squadra** (equipo: quién tiene qué, reservas en conflicto, votos del gate) y **Novità** (novedades), con el botón **Segna come viste** (marcar como vistas).
+
+## 12. Preguntas frecuentes
 
 **¿Necesita internet?** Solo para búsquedas y para los datos de vulnerabilidades (OSV, NVD, KEV, EPSS). Sin conexión, esas comprobaciones quedan como NOT RUN.
 

@@ -1,6 +1,6 @@
 # Sancho in squadra - progetto della modalità team
 
-Stato: **tappa 1 implementata** (non ancora rilasciata): squadra, registro eventi, `claim`/`release`/`task`/`review`, `next` personale e `--team`. Tappe 2-4 da fare. Versione di partenza: Sancho 1.0.0.
+Stato: **tappe 1-4 implementate** (non ancora rilasciate, da collaudare in squadra). Le scelte sulle domande aperte (sezione 8) sono in fondo. Versione di partenza: Sancho 1.0.0.
 
 ## 1. Il problema
 
@@ -234,3 +234,13 @@ Ogni tappa è rilasciabile da sola (1.1.0, 1.2.0...), e la modalità singola non
 3. **Chi può aprire le fasi**: solo il coordinatore, o chiunque abbia il ruolo che guida la fase (per esempio l'architetto per PLAN)?
 4. **Assegnazione dei casi UAT**: li distribuisce il coordinatore, o ognuno prende i casi della piattaforma che ha in mano (Android, web...)?
 5. **Nomi nel registro**: gli id dei membri finiscono nella storia git del progetto. Per progetti pubblici serve un'opzione con pseudonimi?
+
+## 9. Scelte fatte nell'implementazione
+
+1. **Quorum**: una approvazione per fase, salvo diversa indicazione in `team.json` (`quorum`); approvatori predefiniti: i coordinatori.
+2. **Push della prenotazione**: Sancho lo propone subito dopo `claim`, ma chiede sempre prima.
+3. **Aprire le fasi**: solo il coordinatore (anche `submit`, `skip`, livello, nuova iterazione).
+4. **Casi UAT**: ognuno prende i casi che può eseguire (`claim UAT-004`); il coordinatore può pianificarli con `assignee`.
+5. **Nomi**: gli `id` dei membri li sceglie la squadra; per un progetto pubblico basta usare pseudonimi come id e nomi.
+6. **Difetti con lo stesso numero** aperti in parallelo: il secondo prende il numero libero successivo (`RENAMED` in `status`).
+7. **Revisione a quattro occhi** anche per la verifica dei difetti; `wont_fix` solo dal coordinatore.

@@ -117,7 +117,27 @@ Every failure becomes a defect with a severity, a fix task and a re-test. The ph
 
 Sancho designs logos as SVG and palettes as design tokens with checked contrast. For photos or rich illustrations it can use an image-generation service you have configured (API key in an environment variable, or an MCP server). Otherwise it gives you a ready-to-paste prompt for the tool you prefer.
 
-## 11. FAQ
+## 11. Working as a team
+
+Sancho also works with several people on the same project, each in their own clone of the repository. Team mode turns on when `.sancho/team.json` exists; without it, everything stays as for one person.
+
+**Set up the team (once, the coordinator).** Ask "sancho, set up the team": Sancho suggests members from the commit authors and adds them with name, git email and roles (for example `developer`, `qa`). The first coordinator opens and closes phases. Optional: in `team.json`, decide who approves each gate and how many approvals it needs. Commit `team.json` and `.gitattributes`.
+
+**Every day.**
+1. `git pull`, then "sancho, what changed?": you see what the others did, what concerns you first. With the hook ("sancho, install the hook") you see it after every pull.
+2. "sancho, what's next?": the step is **yours**, not the project's. If nothing is for you, Sancho says who is doing what.
+3. Claim a task, a UAT case or a defect before working on it: "sancho, I'll take T-007". Sancho records the claim and offers to commit and push it right away, so the others see it.
+4. When a task is done you mark it ready for review; another member with the `qa` role approves it (four eyes).
+
+**Gates.** The coordinator submits the summary; each approver approves from their own session. The gate closes when there are enough approvals. After a gate the coordinator compacts the log ("sancho, compact the log").
+
+**When things cross.** Two claims on the same task: the first wins, the other person is told. Two defects with the same number: the second is renumbered. Two stories or tasks with the same id after a merge: "sancho, renumber the duplicate ids".
+
+**Limits.** Sancho sees the others' work only after push and pull, and orders events by the computers' clocks. Identity comes from the git email: it is for coordination, not protection. In the Claude app (chat) team mode is not useful: there is no git there.
+
+In the plugin, the panel shows a **Squadra** (team) section (who holds what, contested claims, gate votes) and **Novità** (news), with a **Segna come viste** (mark as seen) button.
+
+## 12. FAQ
 
 **Does it need internet?** Only for research and vulnerability data (OSV, NVD, KEV, EPSS). Without internet those checks are marked NOT RUN.
 

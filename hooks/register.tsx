@@ -18,7 +18,7 @@ const TITLE = 'Sancho'
 const REFRESH_MS = 20000
 
 const data = atom({ plugin: 'sancho', key: 'data' } as const, null, {
-  shape: 'data-1',
+  shape: 'data-2',
 })
 
 const PHASES = ['discover', 'specify', 'plan', 'tasks', 'implement', 'verify', 'release', 'evolve']
@@ -86,11 +86,11 @@ function clean<T>(value: T): T {
 }
 
 // `python` on Windows, often only `python3` on macOS and Linux.
-async function runHelper($: EngineInterface): Promise<string> {
+async function runHelper($: EngineInterface, extra: string[] = []): Promise<string> {
   let last: unknown = new Error('python non trovato')
   for (const exe of ['python', 'python3']) {
     try {
-      const run = await $.process.run([exe, '-I', `${$.plugin.root}/hooks/sancho_panel.py`], { timeoutMs: 40000 })
+      const run = await $.process.run([exe, '-I', `${$.plugin.root}/hooks/sancho_panel.py`, ...extra], { timeoutMs: 40000 })
       if (run.exitCode === 0) return run.stdout
       last = new Error(run.stderr.trim().slice(-300) || `${exe}: exit ${run.exitCode}`)
     } catch (err) {
@@ -100,11 +100,11 @@ async function runHelper($: EngineInterface): Promise<string> {
   throw last
 }
 
-async function refresh($: EngineInterface) {
+async function refresh($: EngineInterface, markSeen = false) {
   const cwd = await $.session.cwd()
   let next: PanelData
   try {
-    const parsed = JSON.parse(await runHelper($))
+    const parsed = JSON.parse(await runHelper($, markSeen ? ['--mark-seen'] : []))
     next = { ...parsed, checkedAt: await $.clock.now() }
   } catch (err) {
     next = {
@@ -137,6 +137,12 @@ function describeChange(before: PanelData | null, after: PanelData): string | nu
   const gateB = b.phases?.[phaseB ?? '']
   if (phaseA !== phaseB || gateA !== gateB) {
     return `Sancho: ${(phaseB ?? '—').toUpperCase()} — gate ${gateOf(gateB).label}`
+  }
+  const mineA: string[] = before?.since?.mine ?? []
+  const mineB: string[] = after.since?.mine ?? []
+  const fresh = mineB.filter(x => !mineA.includes(x))
+  if (fresh.length > 0) {
+    return `Sancho, novità per te: ${fresh[0]}${fresh.length > 1 ? ` (+${fresh.length - 1})` : ''}`
   }
   if (a.next?.action !== b.next?.action && b.next?.action) {
     return `Sancho, prossimo passo (${ROLE[b.next.who] ?? b.next.who}): ${b.next.action}`
@@ -214,6 +220,47 @@ function badge(ui: Ui, text: string, color: string) {
   )
 }
 
+// Team mode: identity, who holds what, contested and stale claims, gate votes.
+function teamSection(ui: Ui, tm: Record<string, any>) {
+  const { Box, Text } = ui
+  const claims = (tm.claims ?? {}) as Record<string, { by: string; status?: string | null }>
+  const byMember: Record<string, string[]> = {}
+  for (const [item, c] of Object.entries(claims)) (byMember[c.by] ??= []).push(c.status ? `${item} ${c.status}` : item)
+  const members: string[] = tm.members ?? []
+  const g = tm.gate
+  return (
+    <Box flexDirection="column" gap="xs">
+      {heading(ui, 'Squadra')}
+      {tm.me ? (
+        <Text size="footnote" dimColor>Sei <Text weight="semibold">{tm.me}</Text></Text>
+      ) : (
+        <Text color="warning" size="footnote">⚠ Non ti riconosco: {tm.identity}</Text>
+      )}
+      {members.map(m => (
+        <Text wrap="truncate-end">
+          <Text weight={m === tm.me ? 'bold' : 'semibold'} color={m === tm.me ? 'claude' : undefined}>{m}</Text>
+          <Text dimColor>: {(byMember[m] ?? []).join(', ') || 'libero'}</Text>
+        </Text>
+      ))}
+      {(tm.conflicts ?? []).map((c: any) => (
+        <Text>{badge(ui, 'conteso', 'error')} {c.item}: resta a {c.won}, {c.lost} deve rilasciarlo</Text>
+      ))}
+      {(tm.stale ?? []).map((item: string) => (
+        <Text>{badge(ui, 'fermo', 'warning')} {item} di {claims[item]?.by ?? '?'}: nessuna attività da giorni</Text>
+      ))}
+      {(tm.renamed ?? []).map((r: any) => (
+        <Text size="footnote" dimColor>{r.from} di {r.by} ora è {r.to}</Text>
+      ))}
+      {g && (
+        <Text>
+          Gate {String(g.phase).toUpperCase()}: <Text weight="semibold">{g.approved_by.length} di {g.quorum}</Text> approvazioni
+          {g.waiting_for.length > 0 && <Text dimColor> · mancano {g.waiting_for.join(', ')}</Text>}
+        </Text>
+      )}
+    </Box>
+  )
+}
+
 // ---------------------------------------------------------------- hooks
 
 export const register: Register = on => {
@@ -253,6 +300,7 @@ export const register: Register = on => {
     const nx = s.next ?? {}
     const blockers = (s.blockers?.length ?? 0) + (s.invalid_files?.length ?? 0)
     const stale = d.zip.state === 'stale' || d.zip.state === 'missing'
+    const news = (d.since?.mine ?? []).length
     return (
       <Box flexDirection="row" alignItems="center" gap={1}>
         <Text color="claude" weight="bold">✦ Sancho</Text>
@@ -265,6 +313,7 @@ export const register: Register = on => {
         <Text color={gate.color}>{gate.label}</Text>
         {blockers > 0 && badge(ui, `${blockers} blocker`, 'error')}
         {stale && badge(ui, 'zip da aggiornare', 'warning')}
+        {news > 0 && badge(ui, `${news} novità per te`, 'claude')}
         <Box flexGrow={1} flexShrink={1}>
           <Text wrap="truncate-end">
             <Text dimColor>→ </Text>
@@ -370,6 +419,28 @@ export const register: Register = on => {
           </Text>
         </Box>,
       )
+
+      // Team mode: who holds what, and what the others did since you last looked
+      if (s.team) sections.push(teamSection(ui, s.team))
+      const sn = d.since
+      const anyNews = !!sn && !sn.first_run && ((sn.commits ?? []).length > 0 || Object.keys(sn.by_member ?? {}).length > 0)
+      if (sn && anyNews) {
+        const members = Object.entries((sn.by_member ?? {}) as Record<string, string[]>)
+        sections.push(
+          <Box flexDirection="column" gap="xs">
+            {heading(ui, 'Novità dal tuo ultimo sguardo')}
+            {(sn.mine ?? []).map((m: string) => <Text>{badge(ui, 'per te', 'claude')} {m}</Text>)}
+            {(sn.phases ?? []).map((ph: any) => <Text>Fase <Text weight="semibold">{String(ph.phase).toUpperCase()}</Text>: {gateOf(ph.to).label}</Text>)}
+            {members.map(([who, items]) => (
+              <Text wrap="truncate-end"><Text weight="semibold">{who}</Text><Text dimColor>: {items.join(' · ')}</Text></Text>
+            ))}
+            {(sn.files ?? []).length > 0 && <Text size="footnote" dimColor>Documenti cambiati: {(sn.files ?? []).map((f: any) => f.path).join(', ')}</Text>}
+            <Button key="mark-seen" plain onPress={() => void refresh($, true).catch(() => undefined)}>
+              <Text color="suggestion">✓ Segna come viste</Text>
+            </Button>
+          </Box>,
+        )
+      }
 
       // Open issues
       const rows: any[] = []

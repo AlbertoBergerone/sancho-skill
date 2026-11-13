@@ -11,6 +11,8 @@ export type PanelData = {
   error: string | null
   cwd: string
   zip: ZipCheck
+  // team mode: `state.py since --json --peek` (what the others did since you last looked)
+  since?: Record<string, any> | null
 }
 
 declare module 'claude-code' {

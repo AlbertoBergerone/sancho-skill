@@ -117,7 +117,27 @@ Ogni fallimento diventa un difetto con una gravità, un task di correzione e un 
 
 Sancho disegna i loghi in SVG e le palette come design token con contrasto verificato. Per foto o illustrazioni complesse può usare un servizio di generazione immagini che hai configurato (chiave API in una variabile d'ambiente, oppure un server MCP). Altrimenti ti consegna un prompt pronto da incollare nello strumento che preferisci.
 
-## 11. Domande frequenti
+## 11. Lavorare in squadra
+
+Sancho funziona anche con più persone sullo stesso progetto, ognuna con la propria copia del repository. La modalità squadra si accende quando esiste `.sancho/team.json`; senza, tutto resta come per una persona sola.
+
+**Preparare la squadra (una volta, il coordinatore).** Chiedi "sancho, prepara la squadra": Sancho propone i membri dagli autori dei commit e li aggiunge con nome, email git e ruoli (per esempio `developer`, `qa`). Il primo coordinatore apre e chiude le fasi. Facoltativo: in `team.json` decidete chi approva ogni gate e quante approvazioni servono. Fai commit di `team.json` e `.gitattributes`.
+
+**Ogni giorno.**
+1. `git pull`, poi "sancho, cosa è cambiato?": vedi cosa hanno fatto gli altri, prima ciò che riguarda te. Con l'hook (`/sancho:status` lo propone, oppure "sancho, installa l'hook") lo vedi da solo dopo ogni pull.
+2. "sancho, prossimo passo": il passo è **tuo**, non del progetto. Se non c'è nulla per te, Sancho dice chi sta facendo cosa.
+3. Prendi un task, un caso UAT o un difetto prima di lavorarci: "sancho, prendo T-007". Sancho registra la prenotazione e propone di fare commit e push subito, così gli altri la vedono.
+4. Finito un task, lo segni pronto per la revisione; lo approva un altro membro con il ruolo `qa` (quattro occhi).
+
+**Gate.** Il coordinatore invia il riepilogo; ogni approvatore approva dalla propria sessione. Il gate si chiude quando le approvazioni bastano. Dopo un gate il coordinatore compatta il registro ("sancho, compatta il registro").
+
+**Se qualcosa si incrocia.** Due prenotazioni dello stesso task: vince la prima, l'altro viene avvisato. Due difetti con lo stesso numero: il secondo viene rinumerato. Due storie o task con lo stesso id dopo un merge: "sancho, rinumera gli id doppi".
+
+**Limiti.** Sancho vede il lavoro degli altri solo dopo push e pull, e ordina gli eventi con l'orologio dei computer. L'identità viene dall'email git: serve a coordinarsi, non a proteggere. Nell'app Claude (chat) la modalità squadra non serve: lì non c'è git.
+
+Nel plugin, il pannello mostra la sezione **Squadra** (chi ha cosa, prenotazioni contese, voti del gate) e **Novità**, con il pulsante **Segna come viste**.
+
+## 12. Domande frequenti
 
 **Serve internet?** Solo per le ricerche e per i dati sulle vulnerabilità (OSV, NVD, KEV, EPSS). Senza connessione quei controlli risultano NOT RUN.
 

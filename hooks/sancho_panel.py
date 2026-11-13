@@ -1,6 +1,7 @@
 """Collects what the Sancho panel shows, as one JSON object on stdout.
 
-Reads only. Runs the bundled skill's `state.py status --json` in the current
+Reads only (except --mark-seen, which moves the personal 'last seen' marker of
+`state.py since`, kept in the git folder). Runs the bundled skill's `state.py status --json` in the current
 directory (the session's folder). In a repository checkout (tools/build.py and
 dist/ present, or SANCHO_REPO set) it also compares dist/sancho.zip with
 skills/sancho; in the plugin as installed the ZIP state is "none".
@@ -61,12 +62,32 @@ def zip_check():
     return {"state": "stale", "detail": "; ".join(parts)}
 
 
+def since(mark_seen):
+    """Team mode: what the others did since this member last looked (state.py since --json)."""
+    args = [sys.executable, "-I", str(STATE), "since", "--json"]
+    if mark_seen:  # move the marker first, then read: nothing left to show
+        subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=20)
+    p = subprocess.run(args + ["--peek"], capture_output=True, text=True, encoding="utf-8", timeout=20)
+    if p.returncode != 0:
+        return None
+    try:
+        return json.loads(p.stdout)
+    except ValueError:
+        return None
+
+
 def main():
     out = {"cwd": os.getcwd()}
     try:
         out["status"], out["error"] = status()
     except Exception as exc:
         out["status"], out["error"] = None, str(exc)
+    out["since"] = None
+    if out["status"] and "team" in out["status"]:
+        try:
+            out["since"] = since("--mark-seen" in sys.argv[1:])
+        except Exception:
+            out["since"] = None
     out["zip"] = zip_check()
     print(json.dumps(out))
 

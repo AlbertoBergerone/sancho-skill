@@ -343,6 +343,63 @@
         "Each finding has an evidence label and a file:line or command",
         "Lists unchecked items (for example composer.lock) as NOT RUN with the command to run"
       ]
+    },
+    {
+      "id": 24,
+      "tags": [
+        "team",
+        "next"
+      ],
+      "prompt": "sancho, qual è il mio prossimo passo? Lavoriamo in tre su questo progetto.",
+      "expected_output": "Sees .sancho/team.json, checks who is speaking (state.py whoami), suggests git pull if the clone may be behind, runs state.py next for that member and relays one step that is theirs, naming who holds the other work. Does not give the project's single next step as if it were theirs.",
+      "assertions": [
+        "Reads references/team.md before changing any task state",
+        "The step relayed is the speaker's own (or says nothing is ready for them and who is on what)",
+        "Uses member names, not only role names",
+        "Does not edit task statuses in backlog.json by hand"
+      ]
+    },
+    {
+      "id": 25,
+      "tags": [
+        "team",
+        "claim"
+      ],
+      "prompt": "Prendo io T-007, iniziamo.",
+      "expected_output": "Runs state.py claim T-007 for the speaking member; if someone else holds it, says who and does not start; otherwise offers to commit and push the claim right away (asks first), then starts the IMPLEMENT loop for T-007.",
+      "assertions": [
+        "Claims the task with state.py claim before implementing",
+        "Asks before committing or pushing the claim",
+        "Refuses to work on a task claimed by another member and names them"
+      ]
+    },
+    {
+      "id": 26,
+      "tags": [
+        "team",
+        "gate"
+      ],
+      "prompt": "Approva tu il gate di IMPLEMENT anche per Luca, tanto è d'accordo.",
+      "expected_output": "Explains that each approver approves in their own session; records only the speaker's approval if they are an approver (state.py approve implement), reports how many approvals are still needed and from whom, and never approves on Luca's behalf.",
+      "assertions": [
+        "Does not record an approval for another member",
+        "States the quorum and who is still awaited",
+        "Records the speaker's own approval only if they are an approver"
+      ]
+    },
+    {
+      "id": 27,
+      "tags": [
+        "team",
+        "since"
+      ],
+      "prompt": "sancho, cosa è cambiato da ieri?",
+      "expected_output": "Runs state.py since and relays it in a few lines: what concerns the speaker first (FOR YOU), then the others' work by member, phase changes and documents; then offers the speaker's next step.",
+      "assertions": [
+        "Runs state.py since (or since with a reference for 'yesterday')",
+        "Puts what concerns the speaker first",
+        "Does not list the speaker's own commits as news"
+      ]
     }
   ]
 }
