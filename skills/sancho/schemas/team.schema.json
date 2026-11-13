@@ -74,6 +74,128 @@
       "type": "integer",
       "minimum": 1,
       "description": "A claimed task with no event for this many days is shown as stale (default 3)."
+    },
+    "approvers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "discover": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "specify": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "plan": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "implement": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "verify": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "release": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        },
+        "evolve": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/member_id"
+          }
+        }
+      },
+      "description": "Who approves each gate (by phase, or default). Without it, the coordinators approve."
+    },
+    "quorum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "discover": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "specify": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "plan": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tasks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "implement": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "verify": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "release": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evolve": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "description": "How many distinct approvals a gate needs (by phase, or default). Default 1."
     }
   },
   "$defs": {

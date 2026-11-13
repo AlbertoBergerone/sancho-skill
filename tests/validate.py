@@ -875,7 +875,7 @@ def team_contested_claim() -> None:
             git_in(cwd, "push", "origin", "HEAD:main")
         s = tasks_of(b, "sara")
         assert s["team"]["claims"]["T-001"]["by"] == "luca", s["team"]
-        assert [(c["task"], c["lost"], c["won"]) for c in s["team"]["conflicts"]] == [("T-001", "sara", "luca")]
+        assert [(c["item"], c["lost"], c["won"]) for c in s["team"]["conflicts"]] == [("T-001", "sara", "luca")]
         nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=b).stdout)
         assert "already claimed by luca" in nxt["action"], nxt
         assert "CONFLICT: T-001" in run_as("sara", "state.py", "next", "--team", cwd=b).stdout
@@ -936,6 +936,140 @@ def solo_mode_unchanged_with_task_command() -> None:
         nxt = json.loads(run("state.py", "next", "--json", cwd=t).stdout)
         assert nxt["who"] == "developer" and "T-002" in nxt["action"] and "member" not in nxt, nxt
         assert "team" not in json.loads(run("state.py", "status", "--json", cwd=t).stdout)
+        # uat and defect without a team write uat.json directly, validated
+        (t / ".sancho/uat.json").write_text(json.dumps(uat_cases()), encoding="utf-8")
+        r = run("state.py", "uat", "UAT-001", "--result", "fail", "--new-defect", "major:error text reveals the account", "--tester", "Ana", cwd=t)
+        assert r.returncode == 0, r.stderr
+        ua = load(t / ".sancho/uat.json")
+        assert ua["cases"][0]["defects"] == ["DEF-001"] and ua["cases"][0]["executed_by"] == "Ana", ua["cases"][0]
+        assert run("state.py", "defect", "DEF-001", "--status", "fixed", "--task", "T-002", cwd=t).returncode == 0
+        assert load(t / ".sancho/uat.json")["defects"][0]["status"] == "fixed"
+        assert run("state.py", "validate", cwd=t).returncode == 0
+
+
+def uat_cases() -> dict:
+    def case(cid: str) -> dict:
+        return {"id": cid, "story": "S-001", "criteria": ["AC-001.1"], "title": f"check {cid}", "platform": "web (Chrome)",
+                "preconditions": [], "steps": [{"n": 1, "action": "do it"}], "expected_result": "it works", "result": "not_tested"}
+    return {"protocol": "sancho/1.0", "cases": [case("UAT-001"), case("UAT-002"), case("UAT-003")], "defects": []}
+
+
+def set_team(t: Path, **fields) -> None:
+    team = load(t / ".sancho/team.json")
+    team.update(fields)
+    (t / ".sancho/team.json").write_text(json.dumps(team, indent=2), encoding="utf-8")
+
+
+def to_phase(t: Path, phase: str) -> None:
+    st = load(t / ".sancho/state.json")
+    for ph in ("implement", "verify"):
+        if ph != phase:
+            st["phases"][ph] = {"status": "skipped", "skip_reason": "level-default"} if ph == "implement" else {"status": "not_started"}
+    st["phases"][phase] = {"status": "in_progress", "lead": "qa" if phase == "verify" else "developer", "started_at": st["created_at"]}
+    st["current_phase"] = phase
+    (t / ".sancho/state.json").write_text(json.dumps(st, indent=2), encoding="utf-8")
+
+
+def log_event(t: Path, ev: dict) -> None:
+    with open(t / f".sancho/log/{ev['by']}.jsonl", "a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(ev) + "\n")
+
+
+@check
+def team_gate_quorum() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t)
+        set_team(t, approvers={"default": ["danilo", "luca"]}, quorum={"implement": 2})
+        items = ",".join(f"{line.split(':')[0]}=pass" for line in run("state.py", "checklist", "implement", cwd=t).stdout.splitlines())
+        assert run_as("luca", "state.py", "submit", "implement", "--results", items, "--coherence", "pass", cwd=t).returncode == 1, "coordinator only"
+        r = run_as("danilo", "state.py", "submit", "implement", "--results", items, "--coherence", "pass", cwd=t)
+        assert r.returncode == 0 and "danilo, luca (2 needed)" in r.stdout, r.stdout
+        assert run_as("sara", "state.py", "approve", "implement", cwd=t).returncode == 1, "sara is not an approver"
+        r = run_as("danilo", "state.py", "approve", "implement", cwd=t)
+        assert r.returncode == 0 and "1 of 2" in r.stdout, r.stdout
+        assert load(t / ".sancho/state.json")["phases"]["implement"]["status"] == "awaiting_approval"
+        nxt = json.loads(run_as("luca", "state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["mine"] and nxt["action"].startswith("Review the IMPLEMENT gate"), nxt
+        nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=t).stdout)
+        assert not nxt["mine"] and "waits for luca" in nxt["action"], nxt
+        assert "gate:   implement 1 of 2 approvals (danilo); waiting for luca" in run_as("sara", "state.py", "status", cwd=t).stdout
+        # luca's approval arrives with a pull (written in his own clone): the coordinator closes the gate
+        st = load(t / ".sancho/state.json")
+        later = datetime_after(st["phases"]["implement"]["gate"]["submitted_at"])
+        log_event(t, {"at": later, "by": "luca", "event": "gate_approve", "phase": "implement", "iteration": 1})
+        nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=t).stdout)
+        assert "has its approvals" in nxt["action"], nxt
+        r = run_as("danilo", "state.py", "approve", "implement", cwd=t)
+        assert r.returncode == 0 and "approved" in r.stdout, r.stdout
+        st = load(t / ".sancho/state.json")
+        assert st["phases"]["implement"]["status"] == "approved" and st["phases"]["implement"]["gate"]["approved_by"] == ["danilo", "luca"]
+        assert st["current_phase"] == "verify"
+        # decisions and approvals carry the member's id
+        assert run_as("sara", "state.py", "decision", "--summary", "use SQLite offline", "--by", "user", cwd=t).returncode == 0
+        assert load(t / ".sancho/state.json")["decisions"][-1]["decided_by"] == "sara"
+        assert run_as("sara", "state.py", "start", "verify", cwd=t).returncode == 1, "the coordinator opens phases"
+        assert run("state.py", "validate", cwd=t).returncode == 0
+
+
+def datetime_after(at: str, seconds: int = 5) -> str:
+    from datetime import datetime, timedelta
+    return (datetime.fromisoformat(at) + timedelta(seconds=seconds)).isoformat()
+
+
+@check
+def team_verify_and_compact() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t)
+        to_phase(t, "verify")
+        (t / ".sancho/uat.json").write_text(json.dumps(uat_cases()), encoding="utf-8")
+        assert run_as("sara", "state.py", "claim", "UAT-001", cwd=t).returncode == 0
+        assert run_as("luca", "state.py", "claim", "UAT-001", cwd=t).returncode == 1
+        assert run_as("luca", "state.py", "claim", "UAT-002", cwd=t).returncode == 0
+        nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["action"].startswith("Run UAT-001"), nxt
+        # both open DEF-001 in their own clones (luca first): sara's becomes DEF-002
+        assert run_as("luca", "state.py", "uat", "UAT-002", "--result", "fail", "--new-defect", "blocker:crash on save", cwd=t).returncode == 0
+        st = load(t / ".sancho/state.json")
+        log_event(t, {"at": datetime_after(st["created_at"], 3600 * 24 * 365), "by": "sara", "event": "defect_open", "defect": "DEF-001",
+                      "uat": "UAT-001", "severity": "major", "description": "wrong error text"})
+        log_event(t, {"at": datetime_after(st["created_at"], 3600 * 24 * 365 + 1), "by": "sara", "event": "uat_result", "case": "UAT-001",
+                      "result": "fail", "defects": ["DEF-001"]})
+        s = tasks_of(t)
+        assert s["team"]["renamed"] == [{"from": "DEF-001", "to": "DEF-002", "by": "sara"}], s["team"]
+        assert s["open_defects"] == {"blocker": 1, "major": 1, "minor": 0, "nit": 0}, s
+        assert "RENAMED: sara's DEF-001 is DEF-002" in run_as("sara", "state.py", "status", cwd=t).stdout
+        nxt = json.loads(run_as("danilo", "state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["action"].startswith("Claim DEF-001 (blocker)"), nxt
+        assert run_as("danilo", "state.py", "claim", "DEF-001", cwd=t).returncode == 0
+        assert run_as("sara", "state.py", "defect", "DEF-001", "--status", "fixed", cwd=t).returncode == 1, "not hers"
+        assert run_as("danilo", "state.py", "defect", "DEF-001", "--status", "fixed", "--task", "T-002", cwd=t).returncode == 0
+        r = run_as("danilo", "state.py", "defect", "DEF-001", "--status", "verified", cwd=t)
+        assert r.returncode == 1 and "four eyes" in r.stderr, r.stderr
+        assert run_as("luca", "state.py", "defect", "DEF-001", "--status", "verified", cwd=t).returncode == 1, "luca has no qa role"
+        run("state.py", "team", "add", "--id", "luca", "--name", "Luca", "--email", "luca@example.com", "--roles", "developer,qa", cwd=t)
+        nxt = json.loads(run_as("luca", "state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["action"].startswith("Verify DEF-001"), nxt
+        assert run_as("luca", "state.py", "defect", "DEF-001", "--status", "verified", cwd=t).returncode == 0
+        assert run_as("sara", "state.py", "defect", "DEF-002", "--status", "wont_fix", cwd=t).returncode == 1, "coordinator only"
+        # compaction: only the coordinator; settled items move to the files, the state stays the same
+        before = tasks_of(t)
+        assert run_as("luca", "state.py", "compact", cwd=t).returncode == 1
+        r = run_as("danilo", "state.py", "compact", cwd=t)
+        assert r.returncode == 0 and "the state is unchanged" in r.stdout, r.stdout + r.stderr
+        after = tasks_of(t)
+        for key in ("tasks", "uat", "open_defects"):
+            assert before[key] == after[key], (key, before[key], after[key])
+        assert after["team"]["renamed"] == before["team"]["renamed"]
+        ua = load(t / ".sancho/uat.json")
+        assert [d["id"] for d in ua["defects"]] == ["DEF-001"] and ua["defects"][0]["status"] == "verified", ua["defects"]
+        assert next(c for c in ua["cases"] if c["id"] == "UAT-002")["result"] == "fail"
+        assert "DEF-001" not in (t / ".sancho/log/danilo.jsonl").read_text(encoding="utf-8")
+        assert "DEF-001" in (t / ".sancho/log/sara.jsonl").read_text(encoding="utf-8"), "sara's open defect stays in her log"
+        assert len(list((t / ".sancho/log/archive").glob("*.jsonl"))) == 1
+        assert run("state.py", "validate", cwd=t).returncode == 0
+        assert "nothing to compact" in run_as("danilo", "state.py", "compact", cwd=t).stdout
 
 
 @check

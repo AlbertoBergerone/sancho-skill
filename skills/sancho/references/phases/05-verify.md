@@ -14,7 +14,7 @@ Arguments: `verify uat` (guided UAT only), `verify security`, `verify a11y`, `ve
    b. active checks (DAST) only after the user approved target and scope -> `scripts/state.py approval ...`;
    c. report; blocker findings become fix tasks (back to IMPLEMENT loop); majors fixed or risk explicitly accepted by the user.
 3. **UX and accessibility** (UX/UI): review each platform against the wireframes and WCAG 2.2 AA (keyboard, screen reader, contrast, focus, target size, text scaling); findings on the severity scale.
-4. **UAT with the user** (QA): guided in chat or via spreadsheet (`references/uat.md`). Each fail -> defect -> fix task -> re-test.
+4. **UAT with the user** (QA): guided in chat or via spreadsheet (`references/uat.md`). Each fail -> defect -> fix task -> re-test. In team mode testers claim cases and developers claim defects (`references/team.md`).
 5. **Fix loop:** developer fixes defects and findings task by task (IMPLEMENT loop rules); QA re-tests; defects become `verified`.
 6. **Coherence:** `--stage full` with the UAT file.
 7. **Gate:** no open blocker/major defects or blocker security findings (unless the user accepted the risk), every criterion met or explicitly deferred by the user.

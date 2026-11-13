@@ -2,13 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/AlbertoBergerone/sancho-skill/schemas/event.schema.json",
   "title": "Sancho team event",
-  "description": "One line of a member's event log, .sancho/log/<member>.jsonl. Lines are only appended, never changed; the current state is the backlog plus all events in time order.",
+  "description": "One line of a member's event log, .sancho/log/<member>.jsonl. Lines are only appended, never changed; the current state is the backlog and UAT files plus all events in time order.",
   "type": "object",
   "required": [
     "at",
     "by",
-    "event",
-    "task"
+    "event"
   ],
   "additionalProperties": false,
   "properties": {
@@ -24,12 +23,41 @@
         "claim",
         "release",
         "task_status",
-        "review"
+        "review",
+        "gate_approve",
+        "gate_reject",
+        "uat_result",
+        "defect_open",
+        "defect_status"
       ]
     },
     "task": {
       "type": "string",
       "pattern": "^T-[0-9]{3,}(\\.[0-9]+)?$"
+    },
+    "case": {
+      "type": "string",
+      "pattern": "^UAT-[0-9]{3,}$"
+    },
+    "defect": {
+      "type": "string",
+      "pattern": "^DEF-[0-9]{3,}$"
+    },
+    "phase": {
+      "enum": [
+        "discover",
+        "specify",
+        "plan",
+        "tasks",
+        "implement",
+        "verify",
+        "release",
+        "evolve"
+      ]
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1
     },
     "branch": {
       "type": "string",
@@ -40,7 +68,11 @@
         "in_progress",
         "blocked",
         "ready_for_review",
-        "failed"
+        "failed",
+        "open",
+        "fixed",
+        "verified",
+        "wont_fix"
       ]
     },
     "outcome": {
@@ -48,6 +80,45 @@
         "approved",
         "changes"
       ]
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "fail",
+        "blocked"
+      ]
+    },
+    "defects": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^DEF-[0-9]{3,}$"
+      }
+    },
+    "uat": {
+      "type": "string",
+      "pattern": "^UAT-[0-9]{3,}$"
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "major",
+        "minor",
+        "nit"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "steps_to_reproduce": {
+      "type": "string"
+    },
+    "fix_task": {
+      "type": "string",
+      "pattern": "^T-[0-9]{3,}(\\.[0-9]+)?$"
     },
     "blocked_reason": {
       "type": "string",
@@ -69,6 +140,68 @@
       "if": {
         "properties": {
           "event": {
+            "const": "claim"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "required": [
+              "task"
+            ]
+          },
+          {
+            "required": [
+              "case"
+            ]
+          },
+          {
+            "required": [
+              "defect"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "release"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "required": [
+              "task"
+            ]
+          },
+          {
+            "required": [
+              "case"
+            ]
+          },
+          {
+            "required": [
+              "defect"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
             "const": "task_status"
           }
         },
@@ -78,8 +211,19 @@
       },
       "then": {
         "required": [
+          "task",
           "status"
-        ]
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "in_progress",
+              "blocked",
+              "ready_for_review",
+              "failed"
+            ]
+          }
+        }
       }
     },
     {
@@ -95,8 +239,112 @@
       },
       "then": {
         "required": [
+          "task",
           "outcome"
         ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "gate_approve"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "phase",
+          "iteration"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "gate_reject"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "phase",
+          "iteration",
+          "note"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "uat_result"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "case",
+          "result"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "defect_open"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "defect",
+          "uat",
+          "severity",
+          "description"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "defect_status"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "defect",
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "open",
+              "fixed",
+              "verified",
+              "wont_fix"
+            ]
+          }
+        }
       }
     },
     {
@@ -169,6 +417,40 @@
         },
         "required": [
           "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "note"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "fail"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "required": [
+          "defects"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "blocked"
+          }
+        },
+        "required": [
+          "result"
         ]
       },
       "then": {

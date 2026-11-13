@@ -129,7 +129,7 @@ See the complete fictional example in [examples/fieldlog](examples/fieldlog/WALK
 ## Development
 
 ```bash
-python -I tests/validate.py      # 41 offline checks: schemas, fixtures, scripts, example, evals
+python -I tests/validate.py      # 43 offline checks: schemas, fixtures, scripts, example, evals
 claude plugin test .            # panel tests (band, pane, notices)
 python tools/build.py            # regenerate agents/ from roles/ and build dist/sancho.zip
 python tools/set_owner.py --user <github-user> --name "<Your Name>"   # fill the placeholders once

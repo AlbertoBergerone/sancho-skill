@@ -115,77 +115,148 @@ def parse_time(text: str) -> datetime:
 
 # ------------------------------------------------------------------------- folding
 
-def fold(backlog: dict, events: List[dict], leads: Optional[set] = None) -> Tuple[dict, dict]:
-    """Apply events to a copy of the backlog.
+EMPTY_UAT = {"cases": [], "defects": []}
 
-    Returns (effective backlog, team view). The team view holds, per task, who claimed it
-    and the last activity; and the conflicts: claims that lost because the task was
-    already claimed (the earliest claim wins, ties by member id). The loser clears a
-    conflict with `release`; a coordinator (in `leads`) may release anyone's claim.
+
+def item_of(ev: dict) -> Optional[str]:
+    return ev.get("task") or ev.get("case") or ev.get("defect")
+
+
+def next_defect_id(taken: set) -> str:
+    n = max([int(d.split("-")[1]) for d in taken] or [0]) + 1
+    return f"DEF-{n:03d}"
+
+
+def fold(backlog: dict, uat: dict, events: List[dict], leads: Optional[set] = None,
+         names: Optional[Dict[str, str]] = None) -> Tuple[dict, dict, dict]:
+    """Apply events to copies of the backlog and the UAT file.
+
+    Returns (effective backlog, effective UAT, team view). Claims work the same for tasks,
+    UAT cases and defects: the earliest claim wins (ties by member id); a later claim is a
+    conflict the loser clears with `release`; a coordinator (in `leads`) may release anyone's
+    claim. Two members opening the same defect id: the later one gets the next free id
+    (view["renamed"]), and that member's later events follow the new id.
     """
     leads = leads or set()
+    names = names or {}
     bl = copy.deepcopy(backlog)
+    ua = copy.deepcopy(uat) if uat else copy.deepcopy(EMPTY_UAT)
+    ua.setdefault("defects", [])
     tasks = {t["id"]: t for t in bl.get("tasks", [])}
+    cases = {c["id"]: c for c in ua.get("cases", [])}
+    defects = {d["id"]: d for d in ua["defects"]}
     claims: Dict[str, dict] = {}
     worked: Dict[str, set] = {}
     last: Dict[str, str] = {}
     conflicts: List[dict] = []
     ignored: List[dict] = []
+    renamed: List[dict] = []
+    remap: Dict[Tuple[str, str], str] = {}
+    gates: Dict[str, dict] = {}
     for ev in events:
-        tid, who = ev["task"], ev["by"]
-        t = tasks.get(tid)
-        if t is None:
-            ignored.append({"event": ev["event"], "task": tid, "by": who, "reason": "unknown task"})
+        who, kind = ev["by"], ev["event"]
+        if ev.get("defect"):
+            ev = {**ev, "defect": remap.get((who, ev["defect"]), ev["defect"])}
+        if ev.get("defects"):
+            ev = {**ev, "defects": [remap.get((who, d), d) for d in ev["defects"]]}
+        if kind in ("gate_approve", "gate_reject"):
+            g = gates.setdefault(f"{ev['phase']}#{ev['iteration']}", {"approved_by": [], "rejected": []})
+            if kind == "gate_approve" and who not in g["approved_by"]:
+                g["approved_by"].append(who)
+                g.setdefault("approved_at", {})[who] = ev["at"]
+            elif kind == "gate_reject":
+                g["rejected"].append({"by": who, "at": ev["at"], "note": ev["note"]})
             continue
-        holder = claims.get(tid, {}).get("by")
-        kind = ev["event"]
+        if kind == "defect_open":
+            did = ev["defect"]
+            if did in defects:
+                new = next_defect_id(set(defects))
+                remap[(who, did)] = new
+                renamed.append({"from": did, "to": new, "by": who})
+                did = new
+            defects[did] = {"id": did, "uat": ev["uat"], "severity": ev["severity"],
+                            "description": ev["description"], "status": "open"}
+            if ev.get("steps_to_reproduce"):
+                defects[did]["steps_to_reproduce"] = ev["steps_to_reproduce"]
+            if ev.get("fix_task"):
+                defects[did]["task"] = ev["fix_task"]
+            ua["defects"].append(defects[did])
+            worked.setdefault(did, set()).add(who)
+            last[did] = ev["at"]
+            continue
+        iid = item_of(ev)
+        target = tasks.get(iid) or cases.get(iid) or defects.get(iid)  # type: ignore[arg-type]
+        if iid is None or target is None:
+            ignored.append({"event": kind, "item": iid, "by": who, "reason": "unknown item"})
+            continue
+        holder = claims.get(iid, {}).get("by")
         if kind == "claim":
             if holder and holder != who:
-                conflicts.append({"task": tid, "lost": who, "won": holder, "at": ev["at"],
-                                  "won_at": claims[tid]["at"]})
+                conflicts.append({"item": iid, "lost": who, "won": holder, "at": ev["at"], "won_at": claims[iid]["at"]})
                 continue
-            if t["status"] in ("completed", "ready_for_review"):
-                ignored.append({"event": kind, "task": tid, "by": who, "reason": f"task is {t['status']}"})
+            if iid in tasks and target["status"] in ("completed", "ready_for_review"):
+                ignored.append({"event": kind, "item": iid, "by": who, "reason": f"task is {target['status']}"})
                 continue
-            claims[tid] = {"by": who, "at": ev["at"], "branch": ev.get("branch")}
-            t["status"] = "in_progress"
-            t.pop("blocked_reason", None)
+            claims[iid] = {"by": who, "at": ev["at"], "branch": ev.get("branch")}
+            if iid in tasks:
+                target["status"] = "in_progress"
+                target.pop("blocked_reason", None)
         elif kind == "release":
-            mine = [c for c in conflicts if c["task"] == tid and c["lost"] == who]
+            mine = [c for c in conflicts if c["item"] == iid and c["lost"] == who]
             if mine and holder != who:
                 conflicts = [c for c in conflicts if c not in mine]
             elif holder == who or (holder and who in leads):
-                claims.pop(tid, None)
-                if t["status"] in ("in_progress", "blocked"):
-                    t["status"] = "pending"
-                    t.pop("blocked_reason", None)
+                claims.pop(iid, None)
+                if iid in tasks and target["status"] in ("in_progress", "blocked"):
+                    target["status"] = "pending"
+                    target.pop("blocked_reason", None)
         elif kind == "task_status":
-            t["status"] = ev["status"]
+            target["status"] = ev["status"]
             if ev["status"] == "blocked":
-                t["blocked_reason"] = ev["blocked_reason"]
+                target["blocked_reason"] = ev["blocked_reason"]
             else:
-                t.pop("blocked_reason", None)
+                target.pop("blocked_reason", None)
             if ev.get("evidence"):
-                t["evidence"] = t.get("evidence", []) + ev["evidence"]
+                target["evidence"] = target.get("evidence", []) + ev["evidence"]
         elif kind == "review":
             if ev["outcome"] == "approved":
-                t["status"] = "completed"
-                t["evidence"] = t.get("evidence", []) + ev["evidence"]
-                claims.pop(tid, None)
+                target["status"] = "completed"
+                target["evidence"] = target.get("evidence", []) + ev["evidence"]
+                claims.pop(iid, None)
             else:
-                t["status"] = "in_progress"
-                t["review_notes"] = ev["note"]
-        if kind != "review":
-            worked.setdefault(tid, set()).add(who)  # authors: four-eyes reviews exclude them
-        last[tid] = ev["at"]
+                target["status"] = "in_progress"
+                target["review_notes"] = ev["note"]
+        elif kind == "uat_result":
+            target.update({"result": ev["result"], "executed_by": names.get(who, who), "executed_at": ev["at"]})
+            for key in ("notes", "defects"):
+                target.pop(key, None)
+            if ev.get("note"):
+                target["notes"] = ev["note"]
+            if ev.get("defects"):
+                target["defects"] = ev["defects"]
+            claims.pop(iid, None)
+        elif kind == "defect_status":
+            target["status"] = ev["status"]
+            if ev.get("fix_task"):
+                target["task"] = ev["fix_task"]
+            if ev["status"] in ("verified", "wont_fix"):
+                claims.pop(iid, None)
+            if ev["status"] == "fixed":
+                target["_fixed_by"] = who
+        if kind not in ("review", "uat_result") and not (kind == "defect_status" and ev["status"] == "verified"):
+            worked.setdefault(iid, set()).add(who)  # authors: four-eyes reviews and verifications exclude them
+        last[iid] = ev["at"]
     view = {
         "claims": claims,
         "authors": {k: sorted(v) for k, v in worked.items()},
+        "fixed_by": {d["id"]: d.pop("_fixed_by") for d in ua["defects"] if "_fixed_by" in d},
         "last_event": last,
         "conflicts": conflicts,
         "ignored": ignored,
+        "renamed": renamed,
+        "gates": gates,
     }
-    return bl, view
+    return bl, ua, view
 
 
 def strip_view_fields(backlog: dict) -> dict:
@@ -194,6 +265,26 @@ def strip_view_fields(backlog: dict) -> dict:
     for t in bl.get("tasks", []):
         t.pop("review_notes", None)
     return bl
+
+
+def approvers_of(team: dict, phase: str) -> List[str]:
+    a = team.get("approvers", {})
+    return a.get(phase) or a.get("default") or coordinators(team)
+
+
+def quorum_of(team: dict, phase: str) -> int:
+    q = team.get("quorum", {})
+    return int(q.get(phase) or q.get("default") or 1)
+
+
+def gate_votes(view: dict, team: dict, phase: str, iteration: int, since: Optional[str]) -> Tuple[List[str], List[dict]]:
+    """Distinct approvals (by allowed approvers, after the submission) and rejections for a gate."""
+    g = view["gates"].get(f"{phase}#{iteration}", {"approved_by": [], "rejected": [], "approved_at": {}})
+    allowed = set(approvers_of(team, phase))
+    after = (lambda at: parse_time(at) >= parse_time(since)) if since else (lambda at: True)
+    ok = [m for m in g["approved_by"] if m in allowed and after(g.get("approved_at", {}).get(m, since or ""))]
+    rej = [r for r in g["rejected"] if r["by"] in allowed and after(r["at"])]
+    return ok, rej
 
 
 def stale(view: dict, team: dict, now: Optional[datetime] = None) -> List[str]:

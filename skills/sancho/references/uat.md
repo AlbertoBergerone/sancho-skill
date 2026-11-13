@@ -30,8 +30,8 @@ For must-have stories also write negative and edge cases: wrong input, empty sta
 ## Running UAT (VERIFY)
 
 Two ways, the user chooses:
-1. **Guided in chat.** One case at a time: show preconditions, data and steps; wait for "pass", "fail" or "blocked" plus notes. On fail ask what they saw (screenshot welcome), then create the defect. Update `uat.json` after each case.
-2. **Spreadsheet.** The user fills the CSV (Result, Executed by, Notes) and sends it back; import with `scripts/uat_export.py .sancho/uat.json --import-csv <file>`. Failed cases without a defect get one automatically (severity major) for QA to triage.
+1. **Guided in chat.** One case at a time: show preconditions, data and steps; wait for "pass", "fail" or "blocked" plus notes. On fail ask what they saw (screenshot welcome), then create the defect. Record each case with `scripts/state.py uat UAT-004 --result pass|fail|blocked [--note TEXT] [--new-defect major:WHAT THEY SAW | --defect DEF-002] [--tester NAME]` (it validates the file); defect status with `scripts/state.py defect DEF-002 --status fixed|verified|wont_fix [--task T-012]`.
+2. **Spreadsheet.** The user fills the CSV (Result, Executed by, Notes) and sends it back; import with `scripts/uat_export.py .sancho/uat.json --import-csv <file>`. Failed cases without a defect get one automatically (severity major) for QA to triage. In team mode the import writes `uat.json` directly: use it only when one person runs the whole UAT round; otherwise each tester records results with `state.py uat` (`references/team.md`).
 
 Defects: `DEF-nnn` with severity (single scale), steps to reproduce, status; linked to a fix task. A fixed defect is `verified` only after the case is re-run and passes.
 

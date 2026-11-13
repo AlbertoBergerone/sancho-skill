@@ -129,7 +129,7 @@ El ejemplo completo, ficticio, está en [examples/fieldlog](examples/fieldlog/WA
 ## Desarrollo
 
 ```bash
-python -I tests/validate.py      # 41 comprobaciones sin conexión: esquemas, fixtures, scripts, ejemplo, evals
+python -I tests/validate.py      # 43 comprobaciones sin conexión: esquemas, fixtures, scripts, ejemplo, evals
 claude plugin test .            # pruebas del panel (franja, detalles, avisos)
 python tools/build.py            # regenera agents/ desde roles/ y construye dist/sancho.zip
 python tools/set_owner.py --user <usuario-github> --name "<Nombre Apellido>"   # sustituye los marcadores una vez

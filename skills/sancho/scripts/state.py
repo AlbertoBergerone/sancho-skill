@@ -26,10 +26,15 @@ Team mode (when .sancho/team.json exists; see references/team.md):
   team       add --id ID --name NAME --email EMAIL --roles developer,qa [--coordinator]
              | list | suggest               members; suggest lists the authors in git log
   whoami                                   which member you are (SANCHO_USER or git config user.email)
-  claim      TASK [--branch B] [--any-role] take a task; it becomes in_progress and yours
-  release    TASK                          give it back (or acknowledge a lost claim)
+  claim      ITEM [--branch B] [--any-role] take a task, UAT case or defect (T-007, UAT-004, DEF-002)
+  release    ITEM                          give it back (or acknowledge a lost claim)
   review     TASK --approve --evidence TYPE:VALUE ... | --changes TEXT   QA review of a ready task
   next       [--json] [--team] [--as ID]   your next step; --team gives one line per member
+  uat        CASE --result pass|fail|blocked [--note T] [--defect DEF-1] [--new-defect major:TEXT]
+                                           record a UAT result (also without a team; --tester NAME)
+  defect     DEF --status open|fixed|verified|wont_fix [--task T-012]   (also without a team)
+  compact                                  coordinator: archive the events of settled items, state unchanged
+  Gates: the coordinator starts and submits; approvers (team.json approvers/quorum) approve or reject.
 
 Exit codes: 0 ok, 1 refused (gate rules), 2 usage/input error.
 """
@@ -102,26 +107,40 @@ class Project:
         if not hasattr(self, "_folded"):
             team = self.team()
             events, problems = _team.read_events(self.root, team) if (team or _team.log_files(self.root)) else ([], [])
-            empty = {"claims": {}, "authors": {}, "last_event": {}, "conflicts": [], "ignored": []}
+            empty = {"claims": {}, "authors": {}, "fixed_by": {}, "last_event": {}, "conflicts": [], "ignored": [],
+                     "renamed": [], "gates": {}}
             try:
                 plan = self.plan_backlog()
             except ValueError:  # reported by invalid_files
                 plan = {"requirements": [], "stories": [], "tasks": []}
-            bl, view = plan, empty
+            try:
+                plan_uat = self.plan_uat()
+            except ValueError:
+                plan_uat = {"cases": [], "defects": []}
+            bl, ua, view = plan, plan_uat, empty
             if team:
+                names = {m["id"]: m["name"] for m in team["members"]}
                 try:
-                    bl, view = _team.fold(plan, events, set(_team.coordinators(team)))
-                except (KeyError, TypeError):  # an invalid backlog: reported by invalid_files
+                    bl, ua, view = _team.fold(plan, plan_uat, events, set(_team.coordinators(team)), names)
+                except (KeyError, TypeError):  # an invalid backlog or UAT file: reported by invalid_files
                     pass
+            self._uat_folded = ua
             self._folded = (bl, view, problems)
         return self._folded
 
     def backlog(self) -> dict:
         return self.folded()[0]
 
-    def uat(self) -> dict:
-        p = self.file("uat", f"{SANCHO_DIR}/uat.json")
+    def uat_path(self) -> Path:
+        return self.file("uat", f"{SANCHO_DIR}/uat.json")
+
+    def plan_uat(self) -> dict:
+        p = self.uat_path()
         return load_json(p) if p.is_file() else {"cases": [], "defects": []}
+
+    def uat(self) -> dict:
+        self.folded()
+        return self._uat_folded
 
     def security(self) -> Optional[dict]:
         p = self.file("security_report", "docs/security/security-report.json")
@@ -327,9 +346,13 @@ def team_next(p: Project, me: str) -> dict:
     lost = [c for c in view["conflicts"] if c["lost"] == me]
     if lost:
         c = lost[0]
-        return mk(f"{c['task']} was already claimed by {c['won']} ({c['won_at']}) before your claim. Agree with "
-                  f"{c['won']}, who keeps it, then run `state.py release {c['task']}` to clear this.")
-    if ph != "implement" or st["phases"][ph]["status"] in ("not_started", "awaiting_approval"):
+        return mk(f"{c['item']} was already claimed by {c['won']} ({c['won_at']}) before your claim. Agree with "
+                  f"{c['won']}, who keeps it, then run `state.py release {c['item']}` to clear this.")
+    if ph and st["phases"][ph]["status"] == "awaiting_approval":
+        return gate_next(p, me, ph)
+    if ph == "verify" and st["phases"][ph]["status"] in ("in_progress", "rejected"):
+        return verify_next(p, me)
+    if ph != "implement" or st["phases"][ph]["status"] == "not_started":
         return mapped_next(p, me)
     mine = [t for t in tasks if claims.get(t["id"], {}).get("by") == me]
     for t in mine:
@@ -375,6 +398,88 @@ def team_next(p: Project, me: str) -> dict:
     if blocked_by_deps:
         parts.append("waiting on dependencies: " + ", ".join(blocked_by_deps))
     return {**mk("Nothing ready for you right now: " + "; ".join(parts) + "."), "mine": False}
+
+
+def gate_status(p: Project, ph: str) -> dict:
+    """Team mode: who approved the submitted gate of PHASE, who is still awaited, and the quorum."""
+    team = p.team()
+    assert team is not None
+    gate = p.state["phases"][ph].get("gate", {})
+    _, view, _ = p.folded()
+    votes, rejections = _team.gate_votes(view, team, ph, int(p.state.get("iteration", 1)), gate.get("submitted_at"))
+    approvers = _team.approvers_of(team, ph)
+    return {"phase": ph, "approved_by": votes, "rejected": rejections, "quorum": _team.quorum_of(team, ph),
+            "waiting_for": [m for m in approvers if m not in votes], "approvers": approvers}
+
+
+def gate_next(p: Project, me: str, ph: str) -> dict:
+    g = gate_status(p, ph)
+    base = {"member": me, "phase": ph, "role": "user"}
+    count = f"{len(g['approved_by'])} of {g['quorum']} approvals"
+    if len(g["approved_by"]) >= g["quorum"]:
+        leads = _team.coordinators(p.team())  # type: ignore[arg-type]
+        action = f"The {ph.upper()} gate has its approvals ({', '.join(g['approved_by'])}): run `state.py approve {ph}` to close it. After that: {next_phase_hint(p.state, ph)}"
+        if me in leads or me in g["approvers"]:
+            return {**base, "who": me, "mine": True, "action": action}
+        return {**base, "who": ", ".join(leads), "mine": False, "action": f"Nothing for you right now: {action}"}
+    if me in g["waiting_for"]:
+        return {**base, "who": me, "mine": True,
+                "action": f"Review the {ph.upper()} gate summary and approve or reject it ({count} so far). After approval: {next_phase_hint(p.state, ph)}"}
+    return {**base, "who": ", ".join(g["waiting_for"]), "mine": False,
+            "action": f"Nothing for you right now: the {ph.upper()} gate waits for {', '.join(g['waiting_for'])} ({count})."}
+
+
+def verify_next(p: Project, me: str) -> dict:
+    """Team mode, VERIFY: own defects and cases first, then verifications, then free work."""
+    team = p.team()
+    assert team is not None
+    st = p.state
+    _, view, _ = p.folded()
+    ua = p.uat()
+    roles = _team.roles_of(team, me)
+    claims = view["claims"]
+
+    def mk(action: str, mine: bool = True) -> dict:
+        return {"who": me, "member": me, "mine": mine, "phase": "verify", "action": action}
+
+    holder = lambda iid: claims.get(iid, {}).get("by")  # noqa: E731
+    rank = {"blocker": 0, "major": 1, "minor": 2, "nit": 3}
+    defects = sorted(ua.get("defects", []), key=lambda d: (rank[d["severity"]], d["id"]))
+    cases = ua.get("cases", [])
+    for d in defects:
+        if holder(d["id"]) == me and d["status"] == "open":
+            return mk(f"Fix {d['id']} ({d['severity']}): {d['description']}. When fixed: "
+                      f"`state.py defect {d['id']} --status fixed [--task T-...]`.")
+    for c in cases:
+        if holder(c["id"]) == me and c["result"] in ("not_tested", "blocked"):
+            return mk(f"Run {c['id']} on {c['platform']}: {c['title']}. Then `state.py uat {c['id']} --result pass|fail|blocked`"
+                      " (/sancho:verify guides you).")
+    if "qa" in roles:
+        for d in defects:
+            if d["status"] == "fixed" and not (team.get("four_eyes", True) and view["fixed_by"].get(d["id"]) == me):
+                return mk(f"Verify {d['id']} ({d['severity']}): re-run {d['uat']}; if it passes "
+                          f"`state.py defect {d['id']} --status verified`, otherwise `--status open`.")
+    if "developer" in roles:
+        for d in defects:
+            if d["status"] == "open" and d["severity"] in ("blocker", "major") and not holder(d["id"]) \
+                    and d.get("assignee") in (me, None):
+                return mk(f"Claim {d['id']} ({d['severity']}): {d['description']}: `state.py claim {d['id']}`, then fix it.")
+    base = compute_next(p)
+    if base["action"].startswith("Fix security"):
+        return mapped_next(p, me)
+    free = [c for c in cases if c["result"] in ("not_tested", "blocked") and not holder(c["id"])
+            and c.get("assignee") in (me, None)]
+    free.sort(key=lambda c: c.get("assignee") != me)
+    if free:
+        c = free[0]
+        return mk(f"Claim {c['id']} on {c['platform']}: {c['title']}: `state.py claim {c['id']}`, then run it.")
+    open_major = [d for d in defects if d["status"] in ("open", "fixed") and d["severity"] in ("blocker", "major")]
+    untested = [c for c in cases if c["result"] in ("not_tested", "blocked")]
+    if open_major or untested:
+        parts = [f"{d['id']} ({d['status']}, {holder(d['id']) or 'free'})" for d in open_major]
+        parts += [f"{c['id']} ({holder(c['id']) or c.get('assignee') or 'free'})" for c in untested]
+        return mk("Nothing ready for you right now: " + ", ".join(parts) + ".", mine=False)
+    return mapped_next(p, me)
 
 
 def mapped_next(p: Project, me: str) -> dict:
@@ -461,7 +566,7 @@ def cmd_next(a: argparse.Namespace) -> int:
             if ov["free"]:
                 print(f"free: {', '.join(ov['free'])} (ready, nobody has claimed them)")
             for c in ov["conflicts"]:
-                print(f"CONFLICT: {c['task']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
+                print(f"CONFLICT: {c['item']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
             for tid in ov["stale"]:
                 print(f"STALE: {tid} claimed by {ov['claims'][tid]['by']}, no activity for a while")
             return 0
@@ -548,10 +653,53 @@ def cmd_team(a: argparse.Namespace) -> int:
     return 0
 
 
+ITEM_KEY = {"T": "task", "UAT": "case", "DEF": "defect"}
+
+
+def item_key(iid: str) -> str:
+    key = ITEM_KEY.get(iid.split("-")[0])
+    if key is None or not re.match(r"^(T-\d{3,}(\.\d+)?|UAT-\d{3,}|DEF-\d{3,})$", iid):
+        die(f"{iid}: expected a task (T-001), a UAT case (UAT-001) or a defect (DEF-001)")
+    return key  # type: ignore[return-value]
+
+
+def find_in(ua: dict, kind: str, iid: str) -> dict:
+    for x in ua.get(kind, []):
+        if x["id"] == iid:
+            return x
+    die(f"{iid} not found in the UAT file")
+    raise AssertionError
+
+
 def cmd_claim(a: argparse.Namespace) -> int:
     p = open_project()
     team, me = require_member(p)
     bl, view, _ = p.folded()
+    key = item_key(a.task)
+    if key != "task":
+        holder = view["claims"].get(a.task)
+        if holder and holder["by"] != me:
+            die(f"{a.task} is already claimed by {holder['by']} since {holder['at']}", 1)
+        if holder:
+            die(f"{a.task} is already yours", 1)
+        if key == "case":
+            c = find_in(p.uat(), "cases", a.task)
+            if c["result"] not in ("not_tested", "blocked", "fail"):
+                die(f"{a.task} already passed", 1)
+            planned = c.get("assignee")
+        else:
+            d = find_in(p.uat(), "defects", a.task)
+            if d["status"] != "open":
+                die(f"{a.task} is {d['status']}", 1)
+            if "developer" not in _team.roles_of(team, me) and not a.any_role:
+                die(f"defects are fixed by developers; pass --any-role if the team agreed", 1)
+            planned = d.get("assignee")
+        path = _team.append_event(p.root, {"by": me, "event": "claim", key: a.task})
+        print(f"{a.task} claimed by {me}")
+        if planned and planned != me:
+            print(f"note: the plan suggested {planned} for {a.task}")
+        print(f"Commit and push {path.relative_to(p.root).as_posix()} now, so the others see the claim (ask the user first).")
+        return 0
     t = find_task(bl, a.task)
     if a.task in parents_of(bl.get("tasks", [])):
         die(f"{a.task} was split into subtasks: claim one of those", 1)
@@ -585,16 +733,221 @@ def cmd_release(a: argparse.Namespace) -> int:
     p = open_project()
     team, me = require_member(p)
     bl, view, _ = p.folded()
-    find_task(bl, a.task)
+    key = item_key(a.task)
+    if key == "task":
+        find_task(bl, a.task)
+    else:
+        find_in(p.uat(), "cases" if key == "case" else "defects", a.task)
     holder = view["claims"].get(a.task, {}).get("by")
-    lost = [c for c in view["conflicts"] if c["task"] == a.task and c["lost"] == me]
+    lost = [c for c in view["conflicts"] if c["item"] == a.task and c["lost"] == me]
     if not (lost or holder == me or (holder and me in _team.coordinators(team))):
         die(f"{a.task} is not yours" + (f" (claimed by {holder})" if holder else " (nobody has claimed it)"), 1)
-    _team.append_event(p.root, {"by": me, "event": "release", "task": a.task})
+    _team.append_event(p.root, {"by": me, "event": "release", key: a.task})
     if lost and holder != me:
         print(f"conflict on {a.task} cleared: {holder} keeps it")
     else:
-        print(f"{a.task} released" + (f" (it was {holder}'s)" if holder != me else "") + ": back to pending")
+        print(f"{a.task} released" + (f" (it was {holder}'s)" if holder != me else "") + (": back to pending" if key == "task" else ""))
+    return 0
+
+
+GATE_EVENTS = ("gate_approve", "gate_reject")
+
+
+def comparable(p: Project) -> str:
+    bl, view, _ = p.folded()
+    return json.dumps([bl.get("tasks", []), p.uat(), view["claims"]], sort_keys=True)
+
+
+def cmd_compact(a: argparse.Namespace) -> int:
+    """Team mode: move the events of settled items into backlog.json / uat.json and an archive."""
+    p = open_project()
+    me = coordinator_only(p, "compacts the event log")
+    if me is None:
+        die("compact is for team mode", 1)
+    team = p.team()
+    bl, view, problems = p.folded()
+    if problems or p.invalid_files():
+        die("repair the invalid files first (`state.py validate`)", 1)
+    ua, st = p.uat(), p.state
+    claims = view["claims"]
+    dstat = {d["id"]: d["status"] for d in ua.get("defects", [])}
+    done_def = ("verified", "wont_fix")
+    settled = {t["id"] for t in bl.get("tasks", []) if t["status"] == "completed" and t["id"] not in claims}
+    settled |= {d for d, s in dstat.items() if s in done_def and d not in claims}
+    settled |= {c["id"] for c in ua.get("cases", []) if c["result"] != "not_tested" and c["id"] not in claims
+                and all(dstat.get(x) in done_def for x in c.get("defects", []))}
+    remap = {(r["by"], r["from"]): r["to"] for r in view["renamed"]}
+    iteration = int(st.get("iteration", 1))
+
+    def gate_closed(ev: dict) -> bool:
+        return ev["iteration"] < iteration or st["phases"][ev["phase"]]["status"] in CLOSED
+
+    def item(ev: dict) -> Optional[str]:
+        if ev.get("defect"):
+            return remap.get((ev["by"], ev["defect"]), ev["defect"])
+        return ev.get("task") or ev.get("case")
+
+    events, _ = _team.read_events(p.root, team)
+    archive = [ev for ev in events if (gate_closed(ev) if ev["event"] in GATE_EVENTS else item(ev) in settled)]
+    if not archive:
+        print("nothing to compact: no event belongs to a settled item or a closed gate")
+        return 0
+    before = comparable(p)
+    plan_bl, plan_ua = p.plan_backlog(), p.plan_uat()
+    eff_tasks = {t["id"]: t for t in bl.get("tasks", [])}
+    plan_bl["tasks"] = [{k: v for k, v in eff_tasks[t["id"]].items() if k != "review_notes"} if t["id"] in settled else t
+                        for t in plan_bl["tasks"]]
+    eff_cases = {c["id"]: c for c in ua.get("cases", [])}
+    plan_ua["cases"] = [eff_cases[c["id"]] if c["id"] in settled else c for c in plan_ua.get("cases", [])]
+    in_plan = {d["id"] for d in plan_ua.get("defects", [])}
+    eff_def = {d["id"]: d for d in ua.get("defects", [])}
+    plan_ua["defects"] = [eff_def[d["id"]] if d["id"] in settled else d for d in plan_ua.get("defects", [])]
+    plan_ua["defects"] += [eff_def[d] for d in sorted(settled) if d in eff_def and d not in in_plan]
+    for doc, name in ((plan_bl, "backlog"), (plan_ua, "uat")):
+        errors = validate(doc, name)
+        if errors:
+            die(f"compaction would make {name} invalid, nothing changed:\n  " + "\n  ".join(errors[:10]))
+    drop = {(ev["_file"], ev["_line"]) for ev in archive}
+    backups = {path: path.read_bytes() for path in [p.backlog_path(), p.uat_path(), *_team.log_files(p.root)] if path.is_file()}
+    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+    arch = p.root / SANCHO_DIR / _team.LOG_DIR / "archive" / f"{stamp}-{me}.jsonl"
+    try:
+        save_json(p.backlog_path(), plan_bl)
+        save_json(p.uat_path(), plan_ua)
+        for f in _team.log_files(p.root):
+            rel = f.relative_to(p.root).as_posix()
+            lines = f.read_text(encoding="utf-8").splitlines()
+            kept = [line for n, line in enumerate(lines, 1) if line.strip() and (rel, n) not in drop]
+            with open(f, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("".join(line + "\n" for line in kept))
+        arch.parent.mkdir(parents=True, exist_ok=True)
+        with open(arch, "w", encoding="utf-8", newline="\n") as fh:
+            for ev in archive:
+                clean = {k: v for k, v in ev.items() if not k.startswith("_")}
+                fh.write(json.dumps(clean, ensure_ascii=False, separators=(",", ":")) + "\n")
+        after = comparable(Project(p.root))
+        if after != before:
+            raise RuntimeError("the state after compaction differs from the state before")
+    except Exception as e:  # restore everything: compaction must never change the state
+        for path, data in backups.items():
+            path.write_bytes(data)
+        if arch.exists():
+            arch.unlink()
+        die(f"compaction undone: {e}", 1)
+    kinds: Dict[str, int] = {}
+    for ev in archive:
+        k = "gates" if ev["event"] in GATE_EVENTS else item_key(item(ev) or "T-000") + "s"
+        kinds[k] = kinds.get(k, 0) + 1
+    print(f"archived {len(archive)} events ({', '.join(f'{k} {v}' for k, v in sorted(kinds.items()))}) "
+          f"to {arch.relative_to(p.root).as_posix()}; the state is unchanged.")
+    print("Commit backlog.json, uat.json and .sancho/log/ together: `chore(sancho): compact event log` (ask first).")
+    return 0
+
+
+def new_defects(specs: List[str], case: str, taken: set) -> List[dict]:
+    """--new-defect "major:what the tester saw" -> defect records with the next free ids."""
+    out = []
+    for spec in specs:
+        sev, sep, desc = spec.partition(":")
+        sev = sev.strip().lower()
+        if not sep or sev not in ("blocker", "major", "minor", "nit") or not desc.strip():
+            die(f"bad --new-defect '{spec}': use SEVERITY:DESCRIPTION, severity blocker|major|minor|nit")
+        did = _team.next_defect_id(taken)
+        taken.add(did)
+        out.append({"id": did, "uat": case, "severity": sev, "description": desc.strip(), "status": "open"})
+    return out
+
+
+def cmd_uat(a: argparse.Namespace) -> int:
+    """Record one UAT result (team: as events; alone: in uat.json)."""
+    p = open_project()
+    ua = p.uat()
+    c = find_in(ua, "cases", a.case)
+    known = {d["id"] for d in ua.get("defects", [])}
+    unknown = [d for d in (a.defect or []) if d not in known]
+    if unknown:
+        die(f"unknown defect(s): {', '.join(unknown)} (use --new-defect SEVERITY:DESCRIPTION)")
+    created = new_defects(a.new_defect or [], a.case, set(known))
+    defect_ids = list(a.defect or []) + [d["id"] for d in created]
+    if a.result == "fail" and not defect_ids:
+        die("--result fail needs --defect DEF-... or --new-defect SEVERITY:DESCRIPTION")
+    if a.result == "blocked" and not a.note:
+        die("--result blocked needs --note (why it could not be run)")
+    if _team.team_path(p.root).is_file():
+        team, me = require_member(p)
+        _, view, _ = p.folded()
+        holder = view["claims"].get(a.case, {}).get("by")
+        if holder and holder != me:
+            die(f"{a.case} is claimed by {holder}", 1)
+        for d in created:
+            ev = {"by": me, "event": "defect_open", "defect": d["id"], "uat": a.case, "severity": d["severity"],
+                  "description": d["description"]}
+            _team.append_event(p.root, ev)
+        ev = {"by": me, "event": "uat_result", "case": a.case, "result": a.result}
+        if a.note:
+            ev["note"] = a.note
+        if defect_ids:
+            ev["defects"] = defect_ids
+        _team.append_event(p.root, ev)
+    else:
+        plan = p.plan_uat()
+        case = find_in(plan, "cases", a.case)
+        case.update({"result": a.result, "executed_by": a.tester or _team.git(p.root, "config", "user.name") or "user",
+                     "executed_at": now_iso()})
+        for key in ("notes", "defects"):
+            case.pop(key, None)
+        if a.note:
+            case["notes"] = a.note
+        if defect_ids:
+            case["defects"] = defect_ids
+        plan.setdefault("defects", []).extend(created)
+        errors = validate(plan, "uat")
+        if errors:
+            die("refusing to write an invalid UAT file:\n  " + "\n  ".join(errors[:10]))
+        save_json(p.uat_path(), plan)
+    print(f"{a.case}: {c['result']} -> {a.result}" + (f" · defects {', '.join(defect_ids)}" if defect_ids else ""))
+    for d in created:
+        print(f"opened {d['id']} ({d['severity']}): {d['description']}")
+    return 0
+
+
+def cmd_defect(a: argparse.Namespace) -> int:
+    """Change a defect's status (team: as an event; alone: in uat.json)."""
+    p = open_project()
+    d = find_in(p.uat(), "defects", a.defect)
+    if _team.team_path(p.root).is_file():
+        team, me = require_member(p)
+        _, view, _ = p.folded()
+        holder = view["claims"].get(a.defect, {}).get("by")
+        roles = _team.roles_of(team, me)
+        if a.status == "fixed" and holder != me:
+            die(f"{a.defect} is not yours: " + (f"claimed by {holder}" if holder else f"claim it first (`state.py claim {a.defect}`)"), 1)
+        if a.status == "verified":
+            if d["status"] != "fixed":
+                die(f"{a.defect} is {d['status']}: only a fixed defect can be verified", 1)
+            if "qa" not in roles:
+                die("verifying a fix is for members with the qa role", 1)
+            if team.get("four_eyes", True) and view["fixed_by"].get(a.defect) == me:
+                die(f"you fixed {a.defect}: someone else with the qa role verifies it (four eyes)", 1)
+        if a.status == "wont_fix" and me not in _team.coordinators(team):
+            die("wont_fix accepts a risk: the coordinator records it, after the team agreed", 1)
+        ev = {"by": me, "event": "defect_status", "defect": a.defect, "status": a.status}
+        if a.task:
+            ev["fix_task"] = a.task
+        if a.note:
+            ev["note"] = a.note
+        _team.append_event(p.root, ev)
+    else:
+        plan = p.plan_uat()
+        target = find_in(plan, "defects", a.defect)
+        target["status"] = a.status
+        if a.task:
+            target["task"] = a.task
+        errors = validate(plan, "uat")
+        if errors:
+            die("refusing to write an invalid UAT file:\n  " + "\n  ".join(errors[:10]))
+        save_json(p.uat_path(), plan)
+    print(f"{a.defect}: {d['status']} -> {a.status}")
     return 0
 
 
@@ -752,8 +1105,10 @@ def cmd_status(a: argparse.Namespace) -> int:
             "members": [m["id"] for m in team["members"]],
             "claims": {tid: {**c, "status": next((t["status"] for t in backlog.get("tasks", []) if t["id"] == tid), None)}
                        for tid, c in view["claims"].items()},
-            "conflicts": view["conflicts"], "stale": _team.stale(view, team),
+            "conflicts": view["conflicts"], "stale": _team.stale(view, team), "renamed": view["renamed"],
         }
+        if st["phases"][st["current_phase"]]["status"] == "awaiting_approval":
+            data["team"]["gate"] = gate_status(p, st["current_phase"])
     data["next"] = compute_next(p, me)
     code = 1 if invalid else 0
     if a.json:
@@ -787,9 +1142,16 @@ def cmd_status(a: argparse.Namespace) -> int:
         print("team:   " + " · ".join(f"{m}: {', '.join(by.get(m, [])) or 'free'}" for m in tm["members"])
               + f" (you: {tm['me'] or 'not a member: ' + tm['identity']})")
         for c in tm["conflicts"]:
-            print(f"CONFLICT: {c['task']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
+            print(f"CONFLICT: {c['item']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
         for tid in tm["stale"]:
             print(f"STALE: {tid} claimed by {tm['claims'][tid]['by']}, no activity for a while")
+        for r in tm["renamed"]:
+            print(f"RENAMED: {r['by']}'s {r['from']} is {r['to']} (two members opened the same id)")
+        if "gate" in tm:
+            g = tm["gate"]
+            print(f"gate:   {g['phase']} {len(g['approved_by'])} of {g['quorum']} approvals"
+                  + (f" ({', '.join(g['approved_by'])})" if g["approved_by"] else "")
+                  + (f"; waiting for {', '.join(g['waiting_for'])}" if g["waiting_for"] else ""))
     if data["last_checkpoint"]:
         print(f"last checkpoint: {data['last_checkpoint']}")
     print(f"NEXT ({data['next']['who']}): {data['next']['action']}")
@@ -804,6 +1166,7 @@ def cmd_checklist(a: argparse.Namespace) -> int:
 
 def cmd_start(a: argparse.Namespace) -> int:
     p = open_project()
+    coordinator_only(p, "opens phases")
     st = p.state
     phase = st["phases"][a.phase]
     if phase["status"] == "approved" and not a.reopen:
@@ -846,8 +1209,26 @@ def parse_results(texts: List[str]) -> List[dict]:
     return out
 
 
+def coordinator_only(p: Project, what: str) -> Optional[str]:
+    """Team mode: only a coordinator may do this. Returns the member (None without a team)."""
+    if not _team.team_path(p.root).is_file():
+        return None
+    team, me = require_member(p)
+    if me not in _team.coordinators(team):
+        die(f"in a team the coordinator ({', '.join(_team.coordinators(team))}) {what}", 1)
+    return me
+
+
+def actor(p: Project, default: str) -> str:
+    """Who to record as deciding: the member in team mode, else the given default."""
+    if not _team.team_path(p.root).is_file():
+        return default
+    return require_member(p)[1]
+
+
 def cmd_submit(a: argparse.Namespace) -> int:
     p = open_project()
+    me = coordinator_only(p, "submits gates")
     phase = p.state["phases"][a.phase]
     if phase["status"] not in ("in_progress", "rejected"):
         die(f"{a.phase} is {phase['status']}; only an in-progress phase can be submitted", 1)
@@ -863,14 +1244,22 @@ def cmd_submit(a: argparse.Namespace) -> int:
     texts = {i["id"]: i["item"] for i in GATES[a.phase]}
     for r in results:
         r["item"] = texts[r["id"]]
-    phase["gate"] = {"checklist": results, "coherence": a.coherence}
+    phase["gate"] = {"checklist": results, "coherence": a.coherence, "submitted_at": now_iso()}
+    if me:
+        phase["gate"]["submitted_by"] = me
     phase["status"] = "awaiting_approval"
     p.save()
     fails = [r["id"] for r in results if r["result"] == "fail"]
     print(f"{a.phase} submitted for approval" + (f" with FAILED items: {', '.join(fails)}" if fails else ""))
     if a.coherence == "fail":
         print("coherence check FAILED")
-    print("Ask the user to approve or reject. Do not approve on their behalf.")
+    if me:
+        team = p.team()
+        assert team is not None
+        print(f"Approvers: {', '.join(_team.approvers_of(team, a.phase))} ({_team.quorum_of(team, a.phase)} needed). "
+              "Each approves with `state.py approve` in their own session. Do not approve on their behalf.")
+    else:
+        print("Ask the user to approve or reject. Do not approve on their behalf.")
     return 0
 
 
@@ -889,8 +1278,29 @@ def cmd_approve(a: argparse.Namespace) -> int:
         problems.append(f"coherence={gate['coherence']} (this gate needs a passing coherence check)")
     if problems and not a.override:
         die(f"gate cannot be approved: {', '.join(problems)}; fix and resubmit, or pass --override with the user's stated reason", 1)
+    approved_by: Optional[List[str]] = None
+    if _team.team_path(p.root).is_file():
+        team, me = require_member(p)
+        g = gate_status(p, a.phase)
+        closing = len(g["approved_by"]) >= g["quorum"] and me in _team.coordinators(team)
+        if me not in g["approvers"] and not closing:
+            die(f"the {a.phase.upper()} gate is approved by {', '.join(g['approvers'])}", 1)
+        if me not in g["approved_by"] and not closing:
+            _team.append_event(p.root, {"by": me, "event": "gate_approve", "phase": a.phase,
+                                        "iteration": int(st.get("iteration", 1))})
+            p = Project(p.root)  # read the new event
+            st, phase = p.state, p.state["phases"][a.phase]
+            gate = phase["gate"]
+            g = gate_status(p, a.phase)
+        if len(g["approved_by"]) < g["quorum"]:
+            print(f"{a.phase} approval by {me} recorded ({len(g['approved_by'])} of {g['quorum']}); waiting for "
+                  f"{', '.join(g['waiting_for'])}. Commit and push your log so they see it (ask first).")
+            return 0
+        approved_by = g["approved_by"]
     ts = now_iso()
     gate["approved_at"] = ts
+    if approved_by:
+        gate["approved_by"] = approved_by
     if a.override:
         gate["notes"] = f"approved with failures by user decision: {a.override}"
     phase["status"] = "approved"
@@ -908,6 +1318,13 @@ def cmd_reject(a: argparse.Namespace) -> int:
     phase = p.state["phases"][a.phase]
     if phase["status"] != "awaiting_approval":
         die(f"{a.phase} is {phase['status']}; nothing to reject", 1)
+    if _team.team_path(p.root).is_file():
+        team, me = require_member(p)
+        if me not in _team.approvers_of(team, a.phase):
+            die(f"the {a.phase.upper()} gate is approved or rejected by {', '.join(_team.approvers_of(team, a.phase))}", 1)
+        _team.append_event(p.root, {"by": me, "event": "gate_reject", "phase": a.phase,
+                                    "iteration": int(p.state.get("iteration", 1)), "note": a.reason})
+        phase["gate"]["rejected_by"] = me
     phase["status"] = "rejected"
     phase["gate"]["rejected_reason"] = a.reason
     p.save()
@@ -917,6 +1334,7 @@ def cmd_reject(a: argparse.Namespace) -> int:
 
 def cmd_skip(a: argparse.Namespace) -> int:
     p = open_project()
+    coordinator_only(p, "skips phases")
     st = p.state
     phase = st["phases"][a.phase]
     if phase["status"] == "approved":
@@ -935,6 +1353,7 @@ def cmd_skip(a: argparse.Namespace) -> int:
 
 def cmd_set_level(a: argparse.Namespace) -> int:
     p = open_project()
+    coordinator_only(p, "changes the level")
     st = p.state
     old = st["project"]["level"]
     st["project"]["level"] = a.level
@@ -958,6 +1377,7 @@ def cmd_set_level(a: argparse.Namespace) -> int:
 
 def cmd_new_iteration(a: argparse.Namespace) -> int:
     p = open_project()
+    coordinator_only(p, "starts a new iteration")
     st = p.state
     open_phases = [ph for ph in PHASES if st["phases"][ph]["status"] not in CLOSED]
     if open_phases and not a.force:
@@ -976,7 +1396,7 @@ def cmd_new_iteration(a: argparse.Namespace) -> int:
 
 def cmd_approval(a: argparse.Namespace) -> int:
     p = open_project()
-    entry = {"action": a.action, "scope": a.scope, "granted_by": "user", "granted_at": now_iso()}
+    entry = {"action": a.action, "scope": a.scope, "granted_by": actor(p, "user"), "granted_at": now_iso()}
     if a.window:
         parts = a.window.split("/")
         try:
@@ -997,7 +1417,7 @@ def cmd_decision(a: argparse.Namespace) -> int:
     p = open_project()
     decisions = p.state.setdefault("decisions", [])
     did = f"D-{len(decisions) + 1:03d}"
-    rec = {"id": did, "summary": a.summary, "decided_by": a.by, "date": now_iso()[:10]}
+    rec = {"id": did, "summary": a.summary, "decided_by": actor(p, "user") if a.by == "user" else a.by, "date": now_iso()[:10]}
     if a.adr:
         rec["adr"] = a.adr
     decisions.append(rec)
@@ -1086,6 +1506,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--approve", action="store_true")
     s.add_argument("--changes")
     s.add_argument("--evidence", action="append")
+    s = sub.add_parser("uat")
+    s.add_argument("case")
+    s.add_argument("--result", required=True, choices=["pass", "fail", "blocked"])
+    s.add_argument("--note")
+    s.add_argument("--defect", action="append", help="an existing defect id")
+    s.add_argument("--new-defect", action="append", dest="new_defect", help="SEVERITY:DESCRIPTION opens a defect")
+    s.add_argument("--tester", help="without a team: who ran the case (default: git user.name)")
+    s = sub.add_parser("defect")
+    s.add_argument("defect")
+    s.add_argument("--status", required=True, choices=["open", "fixed", "verified", "wont_fix"])
+    s.add_argument("--task", help="the fix task, e.g. T-012")
+    s.add_argument("--note")
+    sub.add_parser("compact")
     s = sub.add_parser("checklist")
     s.add_argument("phase", choices=PHASES)
     s = sub.add_parser("start")

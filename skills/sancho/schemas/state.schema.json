@@ -4,57 +4,146 @@
   "title": "Sancho project state",
   "description": "Persistent state of a project driven by Sancho. Stored at .sancho/state.json. Read at the start of every command, updated at the end.",
   "type": "object",
-  "required": ["protocol", "project", "created_at", "updated_at", "current_phase", "phases", "settings"],
+  "required": [
+    "protocol",
+    "project",
+    "created_at",
+    "updated_at",
+    "current_phase",
+    "phases",
+    "settings"
+  ],
   "additionalProperties": false,
   "properties": {
-    "protocol": { "type": "string", "pattern": "^sancho/1\\.[0-9]+$" },
+    "protocol": {
+      "type": "string",
+      "pattern": "^sancho/1\\.[0-9]+$"
+    },
     "project": {
       "type": "object",
-      "required": ["name", "level", "platforms"],
+      "required": [
+        "name",
+        "level",
+        "platforms"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "summary": { "type": "string" },
-        "level": { "$ref": "#/$defs/level" },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "level": {
+          "$ref": "#/$defs/level"
+        },
         "platforms": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "$ref": "#/$defs/platform" }
+          "items": {
+            "$ref": "#/$defs/platform"
+          }
         },
-        "repository": { "type": "string" }
+        "repository": {
+          "type": "string"
+        }
       }
     },
-    "created_at": { "type": "string", "format": "date-time" },
-    "updated_at": { "type": "string", "format": "date-time" },
-    "current_phase": { "$ref": "#/$defs/phase_name" },
-    "iteration": { "type": "integer", "minimum": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "current_phase": {
+      "$ref": "#/$defs/phase_name"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1
+    },
     "phases": {
       "type": "object",
-      "required": ["discover", "specify", "plan", "tasks", "implement", "verify", "release", "evolve"],
+      "required": [
+        "discover",
+        "specify",
+        "plan",
+        "tasks",
+        "implement",
+        "verify",
+        "release",
+        "evolve"
+      ],
       "additionalProperties": false,
       "properties": {
-        "discover": { "$ref": "#/$defs/phase" },
-        "specify": { "$ref": "#/$defs/phase" },
-        "plan": { "$ref": "#/$defs/phase" },
-        "tasks": { "$ref": "#/$defs/phase" },
-        "implement": { "$ref": "#/$defs/phase" },
-        "verify": { "$ref": "#/$defs/phase" },
-        "release": { "$ref": "#/$defs/phase" },
-        "evolve": { "$ref": "#/$defs/phase" }
+        "discover": {
+          "$ref": "#/$defs/phase"
+        },
+        "specify": {
+          "$ref": "#/$defs/phase"
+        },
+        "plan": {
+          "$ref": "#/$defs/phase"
+        },
+        "tasks": {
+          "$ref": "#/$defs/phase"
+        },
+        "implement": {
+          "$ref": "#/$defs/phase"
+        },
+        "verify": {
+          "$ref": "#/$defs/phase"
+        },
+        "release": {
+          "$ref": "#/$defs/phase"
+        },
+        "evolve": {
+          "$ref": "#/$defs/phase"
+        }
       }
     },
     "stack": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["area", "choice", "decided_by"],
+        "required": [
+          "area",
+          "choice",
+          "decided_by"
+        ],
         "additionalProperties": false,
         "properties": {
-          "area": { "type": "string", "minLength": 1 },
-          "choice": { "type": "string", "minLength": 1 },
-          "version": { "type": "string" },
-          "decided_by": { "enum": ["user", "agent"] },
-          "adr": { "type": "string" }
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "choice": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+              }
+            ]
+          },
+          "adr": {
+            "type": "string"
+          }
         }
       }
     },
@@ -62,15 +151,46 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "summary", "decided_by", "date"],
+        "required": [
+          "id",
+          "summary",
+          "decided_by",
+          "date"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "pattern": "^D-[0-9]{3,}$" },
-          "summary": { "type": "string", "minLength": 1 },
-          "decided_by": { "enum": ["user", "agent"] },
-          "date": { "type": "string", "format": "date" },
-          "adr": { "type": "string" },
-          "reversible": { "type": "boolean" }
+          "id": {
+            "type": "string",
+            "pattern": "^D-[0-9]{3,}$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+              }
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "adr": {
+            "type": "string"
+          },
+          "reversible": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -78,28 +198,72 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "tokens_file": { "type": "string" },
-        "logo_files": { "type": "array", "items": { "type": "string" } },
-        "image_provider": { "type": "string" },
-        "approved": { "type": "boolean" }
+        "tokens_file": {
+          "type": "string"
+        },
+        "logo_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "image_provider": {
+          "type": "string"
+        },
+        "approved": {
+          "type": "boolean"
+        }
       }
     },
     "artifacts": {
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "approvals": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["action", "scope", "granted_by", "granted_at"],
+        "required": [
+          "action",
+          "scope",
+          "granted_by",
+          "granted_at"
+        ],
         "additionalProperties": false,
         "properties": {
-          "action": { "type": "string", "minLength": 1 },
-          "scope": { "type": "string", "minLength": 1 },
-          "granted_by": { "enum": ["user", "operator"] },
-          "granted_at": { "type": "string", "format": "date-time" },
-          "window": { "type": "string", "minLength": 1, "description": "Agreed time window START/END (ISO 8601); required for active tests on production." }
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "operator"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+              }
+            ]
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "window": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Agreed time window START/END (ISO 8601); required for active tests on production."
+          }
         }
       }
     },
@@ -107,62 +271,222 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["at", "file"],
+        "required": [
+          "at",
+          "file"
+        ],
         "additionalProperties": false,
         "properties": {
-          "at": { "type": "string", "format": "date-time" },
-          "file": { "type": "string" }
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "file": {
+            "type": "string"
+          }
         }
       }
     },
     "settings": {
       "type": "object",
-      "required": ["language", "complexity_threshold"],
+      "required": [
+        "language",
+        "complexity_threshold"
+      ],
       "additionalProperties": false,
       "properties": {
-        "language": { "type": "string", "minLength": 2, "description": "BCP-47 tag of the project language, e.g. it, en, es. Used when neither the user's message nor the conversation shows a clear language." },
-        "complexity_threshold": { "type": "integer", "minimum": 1, "maximum": 10 },
-        "tdd": { "type": "boolean" }
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "description": "BCP-47 tag of the project language, e.g. it, en, es. Used when neither the user's message nor the conversation shows a clear language."
+        },
+        "complexity_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "tdd": {
+          "type": "boolean"
+        }
       }
     }
   },
   "$defs": {
-    "level": { "enum": ["L0", "L1", "L2", "L3"] },
-    "phase_name": { "enum": ["discover", "specify", "plan", "tasks", "implement", "verify", "release", "evolve"] },
-    "role": { "enum": ["analyst-pm", "ux-ui-designer", "architect", "developer", "qa", "security", "release-manager", "user"] },
-    "platform": { "enum": ["web", "pwa", "android", "ios", "desktop-windows", "desktop-macos", "desktop-linux", "cli", "api", "embedded"] },
+    "level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ]
+    },
+    "phase_name": {
+      "enum": [
+        "discover",
+        "specify",
+        "plan",
+        "tasks",
+        "implement",
+        "verify",
+        "release",
+        "evolve"
+      ]
+    },
+    "role": {
+      "enum": [
+        "analyst-pm",
+        "ux-ui-designer",
+        "architect",
+        "developer",
+        "qa",
+        "security",
+        "release-manager",
+        "user"
+      ]
+    },
+    "platform": {
+      "enum": [
+        "web",
+        "pwa",
+        "android",
+        "ios",
+        "desktop-windows",
+        "desktop-macos",
+        "desktop-linux",
+        "cli",
+        "api",
+        "embedded"
+      ]
+    },
     "phase": {
       "type": "object",
-      "required": ["status"],
+      "required": [
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": { "enum": ["not_started", "in_progress", "awaiting_approval", "approved", "rejected", "skipped"] },
-        "lead": { "$ref": "#/$defs/role" },
-        "started_at": { "type": "string", "format": "date-time" },
-        "completed_at": { "type": "string", "format": "date-time" },
-        "skip_reason": { "type": "string", "minLength": 1 },
-        "adr": { "type": "string" },
-        "gate": { "$ref": "#/$defs/gate" }
+        "status": {
+          "enum": [
+            "not_started",
+            "in_progress",
+            "awaiting_approval",
+            "approved",
+            "rejected",
+            "skipped"
+          ]
+        },
+        "lead": {
+          "$ref": "#/$defs/role"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "skip_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adr": {
+          "type": "string"
+        },
+        "gate": {
+          "$ref": "#/$defs/gate"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "status": { "const": "skipped" } }, "required": ["status"] },
-          "then": { "required": ["skip_reason"] }
+          "if": {
+            "properties": {
+              "status": {
+                "const": "skipped"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "skip_reason"
+            ]
+          }
         },
         {
           "if": {
-            "properties": { "status": { "const": "skipped" }, "skip_reason": { "not": { "const": "level-default" } } },
-            "required": ["status", "skip_reason"]
+            "properties": {
+              "status": {
+                "const": "skipped"
+              },
+              "skip_reason": {
+                "not": {
+                  "const": "level-default"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "skip_reason"
+            ]
           },
-          "then": { "required": ["adr"] }
+          "then": {
+            "required": [
+              "adr"
+            ]
+          }
         },
         {
-          "if": { "properties": { "status": { "const": "approved" } }, "required": ["status"] },
-          "then": { "required": ["gate"], "properties": { "gate": { "required": ["approved_at", "checklist", "coherence"] } } }
+          "if": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "gate"
+            ],
+            "properties": {
+              "gate": {
+                "required": [
+                  "approved_at",
+                  "checklist",
+                  "coherence"
+                ]
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "status": { "const": "rejected" } }, "required": ["status"] },
-          "then": { "required": ["gate"], "properties": { "gate": { "required": ["rejected_reason"] } } }
+          "if": {
+            "properties": {
+              "status": {
+                "const": "rejected"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "gate"
+            ],
+            "properties": {
+              "gate": {
+                "required": [
+                  "rejected_reason"
+                ]
+              }
+            }
+          }
         }
       ]
     },
@@ -174,20 +498,70 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "result"],
+            "required": [
+              "id",
+              "result"
+            ],
             "additionalProperties": false,
             "properties": {
-              "id": { "type": "string" },
-              "item": { "type": "string" },
-              "result": { "enum": ["pass", "fail", "n/a"] },
-              "note": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "item": {
+                "type": "string"
+              },
+              "result": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "n/a"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
             }
           }
         },
-        "coherence": { "enum": ["pass", "fail", "not_run", "n/a"] },
-        "approved_at": { "type": "string", "format": "date-time" },
-        "rejected_reason": { "type": "string", "minLength": 1 },
-        "notes": { "type": "string" }
+        "coherence": {
+          "enum": [
+            "pass",
+            "fail",
+            "not_run",
+            "n/a"
+          ]
+        },
+        "approved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rejected_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string"
+        },
+        "submitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "submitted_by": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "approved_by": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+          }
+        },
+        "rejected_by": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        }
       }
     }
   }

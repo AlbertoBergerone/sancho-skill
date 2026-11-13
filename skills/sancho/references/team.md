@@ -22,6 +22,11 @@ Read this when `.sancho/team.json` exists: several people work on the project, e
 | Give it back | `scripts/state.py release T-007` |
 | Update my task | `scripts/state.py task T-007 --status in_progress|blocked|ready_for_review|failed [--reason TEXT] [--evidence commit:SHA] [--note TEXT]` |
 | Review a task (qa role) | `scripts/state.py review T-007 --approve --evidence test:"CMD"` or `--changes "what to fix"` |
+| Take a UAT case or a defect | `scripts/state.py claim UAT-004`, `scripts/state.py claim DEF-002` (defects: developer role) |
+| Record a UAT result | `scripts/state.py uat UAT-004 --result pass|fail|blocked [--note TEXT] [--new-defect major:WHAT THEY SAW] [--defect DEF-002]` |
+| Defect status | `scripts/state.py defect DEF-002 --status fixed [--task T-012]` (the one who claimed it); `--status verified` (qa role, not who fixed it); `--status wont_fix` (coordinator, after the team agreed) |
+| Gates | coordinator: `start`, `submit`; approvers: `approve PHASE` / `reject PHASE --reason TEXT` |
+| Compact the log | coordinator, after a gate: `scripts/state.py compact` |
 
 Evidence is `TYPE:VALUE`: `commit:SHA`, `test:"CMD"`, `command:"CMD"`, `file:PATH`, `uat:UAT-004`, `url:URL`, `screenshot:PATH`, `log:TEXT`.
 
@@ -36,6 +41,21 @@ Evidence is `TYPE:VALUE`: `commit:SHA`, `test:"CMD"`, `command:"CMD"`, `file:PAT
 7. **Relaying `next`.** Say the step for the speaker. When it is not theirs, say whose it is and what they can do meanwhile (a free task, a review). Use member names, not role names, when the team has them.
 8. **Branches.** One branch per task, for example `t-007-offline-login`; `claim` records the current branch. Commits keep the Conventional Commits rule with the task id.
 
-## What team mode does not do yet
+## Gates
 
-UAT cases and defects have no assignee, gates have no named approvers or quorum, and there is no "what changed since my last pull" command. Until then: split UAT cases by talking, and the coordinator records gate approvals as in single-person mode.
+- The coordinator opens phases (`start`), submits gates (`submit`), skips phases and changes the level. Others get "the coordinator does this".
+- Approvers and quorum are in `team.json`: `"approvers": {"default": ["danilo"], "release": ["danilo", "luca"]}`, `"quorum": {"release": 2}`. Without them the coordinators approve and one approval is enough. Edit `team.json` only when the team agreed, and commit it.
+- Each approver approves in their own session with `approve PHASE`, after reading the gate summary themselves; never approve for someone else. Below the quorum the approval is recorded and the gate stays open; `next` tells the others who is still awaited. When the approvals arrive with a pull, the coordinator (or any approver) runs `approve PHASE` again to close the gate; `gate.approved_by` lists the members.
+- One `reject` by an approver sends the gate back, with the reason.
+- `decision --by user` and `approval` record the speaking member's id, not "user".
+
+## VERIFY in a team
+
+- Testers claim UAT cases (`claim UAT-004`), run them (guided in chat as in `references/uat.md`) and record the result with `state.py uat`. A failing case opens a defect with `--new-defect SEVERITY:TEXT`.
+- Two testers may open the same defect id before seeing each other's push: the later one is renamed to the next free id (`status` shows `RENAMED`); tell the tester the new id.
+- Developers claim defects (`claim DEF-002`), fix them (IMPLEMENT loop rules) and mark them `fixed`; someone else with the qa role re-runs the case and marks them `verified` (or back to `open`). `next` gives blocker defects first.
+- `wont_fix` accepts a risk: only the coordinator records it, after the team (and the gate approvers) agreed.
+
+## Compaction
+
+After a gate closes, the coordinator runs `state.py compact`: events of settled items (completed tasks, executed cases whose defects are closed, verified or wont_fix defects, votes of closed gates) move into `backlog.json` / `uat.json` and `.sancho/log/archive/`. The state is identical before and after (the command checks it and undoes itself otherwise). Commit the result in one commit and push it soon, so the others pull it before appending much more.
