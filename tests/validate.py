@@ -734,6 +734,210 @@ def invocation_forms_documented() -> None:
         assert "<!-- invocation-forms -->" in guide, f"guide.{lang}.md misses the invocation note"
 
 
+# ----------------------------------------------------------------------- team mode
+
+def run_as(member: str, script: str, *args: str, cwd: Path) -> subprocess.CompletedProcess:
+    env = {**__import__("os").environ, "SANCHO_USER": member}
+    return subprocess.run([sys.executable, "-I", str(SCRIPTS / script), *args], cwd=str(cwd),
+                          capture_output=True, text=True, encoding="utf-8", env=env)
+
+
+def git_in(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    p = subprocess.run(["git", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", *args], cwd=str(cwd),
+                       capture_output=True, text=True, encoding="utf-8")
+    assert p.returncode == 0, f"git {' '.join(args)}: {p.stdout}{p.stderr}"
+    return p
+
+
+TEAM = [("luca", "Luca", "developer"), ("sara", "Sara", "developer"), ("danilo", "Danilo", "developer,qa")]
+
+
+def team_project(t: Path, team: bool = True) -> None:
+    """A project in IMPLEMENT with four tasks: T-003 depends on T-001, T-004 is planned for sara."""
+    assert run("state.py", "init", "--name", "Team", "--level", "L1", "--platforms", "web", cwd=t).returncode == 0
+    st = load(t / ".sancho/state.json")
+    for ph in ("discover", "specify", "tasks"):
+        st["phases"][ph] = {"status": "skipped", "skip_reason": "level-default"}
+    st["phases"]["implement"].update({"status": "in_progress", "started_at": st["created_at"]})
+    st["current_phase"] = "implement"
+    (t / ".sancho/state.json").write_text(json.dumps(st, indent=2), encoding="utf-8")
+
+    def task(tid: str, deps=(), **extra) -> dict:
+        return {"id": tid, "story": "S-001", "title": f"work {tid}", "owner": "developer", "status": "pending",
+                "depends_on": list(deps), "complexity": {"score": 3}, **extra}
+    backlog = {"protocol": "sancho/1.0",
+               "requirements": [{"id": "R-001", "kind": "functional", "statement": "x", "priority": "must", "source": "user"}],
+               "stories": [{"id": "S-001", "title": "s", "as_a": "a", "i_want": "b", "so_that": "c", "requirements": ["R-001"],
+                            "priority": "must", "context": "self-contained context for the team tests",
+                            "acceptance_criteria": [{"id": "AC-001.1", "description": "d", "verification": {"method": "review"},
+                                                     "status": "not_verified"}]}],
+               "tasks": [task("T-001"), task("T-002"), task("T-003", ["T-001"]), task("T-004", assignee="sara")]}
+    (t / ".sancho/backlog.json").write_text(json.dumps(backlog, indent=2), encoding="utf-8")
+    if team:
+        for mid, name, roles in TEAM:
+            extra = ["--coordinator"] if mid == "danilo" else []
+            r = run("state.py", "team", "add", "--id", mid, "--name", name, "--email", f"{mid}@example.com", "--roles", roles, *extra, cwd=t)
+            assert r.returncode == 0, r.stderr
+    assert run("state.py", "validate", cwd=t).returncode == 0, run("state.py", "validate", cwd=t).stdout
+
+
+def tasks_of(cwd: Path, member: str = "danilo") -> dict:
+    out = json.loads(run_as(member, "state.py", "status", "--json", cwd=cwd).stdout)
+    return out
+
+
+@check
+def team_merges_without_conflicts() -> None:
+    # three people, four clones (luca works from two computers), merged in turn: no conflict, same state everywhere
+    assert shutil.which("git"), "git is needed for the team mode checks"
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        git_in(base, "init", "--bare", "origin.git")
+        seed = base / "seed"
+        seed.mkdir()
+        git_in(seed, "init")
+        team_project(seed)
+        assert ".sancho/log/*.jsonl merge=union" in (seed / ".gitattributes").read_text(encoding="utf-8")
+        git_in(seed, "add", "-A")
+        git_in(seed, "-c", "user.name=seed", "-c", "user.email=seed@example.com", "commit", "-m", "seed")
+        git_in(seed, "push", str(base / "origin.git"), "HEAD:main")
+        clones = {}
+        for name, member in (("a", "luca"), ("a2", "luca"), ("b", "sara"), ("c", "danilo")):
+            git_in(base, "clone", "-b", "main", str(base / "origin.git"), name)
+            git_in(base / name, "config", "user.email", f"{member}@example.com")
+            git_in(base / name, "config", "user.name", member)
+            clones[name] = (base / name, member)
+
+        def act(name: str, *args: str) -> None:
+            cwd, member = clones[name]
+            r = run_as(member, "state.py", *args, cwd=cwd)
+            assert r.returncode == 0, f"{member}: {' '.join(args)}: {r.stdout}{r.stderr}"
+
+        def sync(name: str, msg: str) -> None:
+            cwd, _ = clones[name]
+            git_in(cwd, "add", "-A")
+            git_in(cwd, "commit", "-m", msg)
+            git_in(cwd, "pull", "--no-rebase", "--no-edit", "origin", "main")
+            assert not git_in(cwd, "diff", "--name-only", "--diff-filter=U").stdout.strip(), f"conflict in {name}"
+            git_in(cwd, "push", "origin", "HEAD:main")
+
+        act("a", "claim", "T-001")
+        act("a", "task", "T-001", "--status", "ready_for_review", "--evidence", "commit:abcdef1")
+        act("a2", "claim", "T-004")          # same member, other computer: both append to luca.jsonl
+        act("b", "claim", "T-002")
+        sync("a", "luca: T-001 ready")
+        sync("a2", "luca: T-004")            # union merge of luca.jsonl
+        sync("b", "sara: T-002")
+        git_in(clones["c"][0], "pull", "--no-rebase", "--no-edit", "origin", "main")
+        act("c", "review", "T-001", "--approve", "--evidence", "test:pytest tests/test_t001.py")
+        sync("c", "danilo: review T-001")
+        states = []
+        for name in ("a", "a2", "b", "c"):
+            git_in(clones[name][0], "pull", "--no-rebase", "--no-edit", "origin", "main")
+            s = tasks_of(clones[name][0])
+            states.append((s["tasks"], s["team"]["claims"]))
+        assert all(x == states[0] for x in states), states
+        tasks, claims = states[0]
+        assert tasks == {"completed": 1, "in_progress": 2, "pending": 1}, tasks
+        assert {k: v["by"] for k, v in claims.items()} == {"T-002": "sara", "T-004": "luca"}, claims
+        assert len((clones["a"][0] / ".sancho/log/luca.jsonl").read_text(encoding="utf-8").splitlines()) == 3
+        nxt = json.loads(run_as("danilo", "state.py", "next", "--json", cwd=clones["c"][0]).stdout)
+        assert "T-003" in nxt["action"] and nxt["mine"], nxt   # T-001 done, so T-003 is ready and free
+        nxt = json.loads(run_as("luca", "state.py", "next", "--json", cwd=clones["a"][0]).stdout)
+        assert "Continue T-004" in nxt["action"], nxt
+
+
+@check
+def team_contested_claim() -> None:
+    import time
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        git_in(base, "init", "--bare", "origin.git")
+        seed = base / "seed"
+        seed.mkdir()
+        git_in(seed, "init")
+        team_project(seed)
+        git_in(seed, "add", "-A")
+        git_in(seed, "-c", "user.name=seed", "-c", "user.email=seed@example.com", "commit", "-m", "seed")
+        git_in(seed, "push", str(base / "origin.git"), "HEAD:main")
+        for name in ("a", "b"):
+            git_in(base, "clone", "-b", "main", str(base / "origin.git"), name)
+            git_in(base / name, "config", "user.email", f"{name}@example.com")
+            git_in(base / name, "config", "user.name", name)
+        a, b = base / "a", base / "b"
+        assert run_as("luca", "state.py", "claim", "T-001", cwd=a).returncode == 0
+        time.sleep(1.2)
+        assert run_as("sara", "state.py", "claim", "T-001", cwd=b).returncode == 0   # not seen yet
+        for cwd in (a, b):
+            git_in(cwd, "add", "-A")
+            git_in(cwd, "commit", "-m", "claim")
+            git_in(cwd, "pull", "--no-rebase", "--no-edit", "origin", "main")
+            git_in(cwd, "push", "origin", "HEAD:main")
+        s = tasks_of(b, "sara")
+        assert s["team"]["claims"]["T-001"]["by"] == "luca", s["team"]
+        assert [(c["task"], c["lost"], c["won"]) for c in s["team"]["conflicts"]] == [("T-001", "sara", "luca")]
+        nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=b).stdout)
+        assert "already claimed by luca" in nxt["action"], nxt
+        assert "CONFLICT: T-001" in run_as("sara", "state.py", "next", "--team", cwd=b).stdout
+        assert run_as("sara", "state.py", "claim", "T-001", cwd=b).returncode == 1, "a visible claim must be refused"
+        assert run_as("sara", "state.py", "task", "T-001", "--status", "blocked", "--reason", "x", cwd=b).returncode == 1
+        assert run_as("sara", "state.py", "release", "T-001", cwd=b).returncode == 0
+        s = tasks_of(b, "sara")
+        assert not s["team"]["conflicts"] and s["team"]["claims"]["T-001"]["by"] == "luca", s["team"]
+        nxt = json.loads(run_as("sara", "state.py", "next", "--json", cwd=b).stdout)
+        assert "T-004" in nxt["action"], f"the task planned for sara comes first: {nxt}"
+
+
+@check
+def team_four_eyes_and_review() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t)
+        assert run_as("danilo", "state.py", "claim", "T-001", cwd=t).returncode == 0
+        assert run_as("danilo", "state.py", "task", "T-001", "--status", "ready_for_review", cwd=t).returncode == 2, "evidence required"
+        assert run_as("danilo", "state.py", "task", "T-001", "--status", "completed", "--evidence", "commit:abcdef1", cwd=t).returncode == 1
+        assert run_as("danilo", "state.py", "task", "T-001", "--status", "ready_for_review", "--evidence", "commit:abcdef1", cwd=t).returncode == 0
+        r = run_as("danilo", "state.py", "review", "T-001", "--approve", "--evidence", "test:pytest", cwd=t)
+        assert r.returncode == 1 and "four eyes" in r.stderr, r.stderr
+        assert run_as("luca", "state.py", "review", "T-001", "--changes", "x", cwd=t).returncode == 1, "luca has no qa role"
+        r = run("state.py", "team", "add", "--id", "luca", "--name", "Luca", "--email", "luca@example.com", "--roles", "developer,qa", cwd=t)
+        assert r.returncode == 0
+        nxt = json.loads(run_as("luca", "state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["action"].startswith("Review T-001"), nxt
+        assert run_as("luca", "state.py", "review", "T-001", "--changes", "missing test for the error path", cwd=t).returncode == 0
+        nxt = json.loads(run_as("danilo", "state.py", "next", "--json", cwd=t).stdout)
+        assert "Continue T-001" in nxt["action"] and "missing test" in nxt["action"], nxt
+        run_as("danilo", "state.py", "task", "T-001", "--status", "ready_for_review", "--evidence", "commit:abcdef2", cwd=t)
+        assert run_as("luca", "state.py", "review", "T-001", "--approve", "--evidence", "test:pytest -k error", cwd=t).returncode == 0
+        s = tasks_of(t)
+        assert s["tasks"].get("completed") == 1 and "T-001" not in s["team"]["claims"], s
+        assert run("state.py", "validate", cwd=t).returncode == 0
+        # a log written in someone else's name is refused, and reported
+        with open(t / ".sancho/log/sara.jsonl", "a", encoding="utf-8") as fh:
+            fh.write('{"at":"2026-11-13T10:00:00+01:00","by":"luca","event":"release","task":"T-002"}\n')
+        v = run("state.py", "validate", cwd=t)
+        assert v.returncode == 1 and "each member writes only their own log" in v.stdout, v.stdout
+        assert "Repair .sancho/log/sara.jsonl" in json.loads(run_as("luca", "state.py", "next", "--json", cwd=t).stdout)["action"]
+        assert run("state.py", "whoami", cwd=t).returncode in (0, 1)
+
+
+@check
+def solo_mode_unchanged_with_task_command() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t, team=False)
+        assert not (t / ".sancho/team.json").exists()
+        assert run("state.py", "claim", "T-001", cwd=t).returncode == 1, "claim is for team mode"
+        assert run("state.py", "task", "T-001", "--status", "in_progress", cwd=t).returncode == 0
+        assert run("state.py", "task", "T-001", "--status", "ready_for_review", cwd=t).returncode == 2
+        assert run("state.py", "task", "T-001", "--status", "completed", "--evidence", "commit:abcdef1", cwd=t).returncode == 0
+        bl = load(t / ".sancho/backlog.json")
+        assert bl["tasks"][0]["status"] == "completed" and bl["tasks"][0]["evidence"] == [{"type": "commit", "commit": "abcdef1"}]
+        nxt = json.loads(run("state.py", "next", "--json", cwd=t).stdout)
+        assert nxt["who"] == "developer" and "T-002" in nxt["action"] and "member" not in nxt, nxt
+        assert "team" not in json.loads(run("state.py", "status", "--json", cwd=t).stdout)
+
+
 @check
 def panel_wired() -> None:
     # The plugin's panel (band, toasts, details pane) for the Claude app and Claude Code; not in the ZIP.

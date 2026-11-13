@@ -7,7 +7,7 @@
 ## Loop (per task)
 
 1. `scripts/state.py next` (or the task the user named) gives the next ready task: pending, all dependencies completed, highest story priority first.
-2. Set it `in_progress` in the backlog.
+2. Set it `in_progress`: `scripts/state.py task T-007 --status in_progress` (it validates the backlog). In team mode (`.sancho/team.json` exists) the member claims it instead, `scripts/state.py claim T-007`, and every later status change goes through `task` and `review`, never by editing `backlog.json` (`references/team.md`).
 3. Brief the developer (subagent or role-play) with: the task, its story `context`, the criteria, the standards listed in the task, `references/coding-guardrails.md`, and the TDD rule (`roles/developer.md`).
 4. Developer: baseline tests -> red -> green -> refactor -> lint/typecheck/tests/build -> task `ready_for_review` with evidence -> handoff to QA.
 5. QA (or the orchestrator wearing the QA hat): re-run the key test, review the diff for scope and standards -> `completed` with evidence, or back to `in_progress` with findings.

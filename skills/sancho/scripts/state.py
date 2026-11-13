@@ -18,7 +18,18 @@ Run from the project root (or any subfolder). State lives in .sancho/state.json.
   approval   --action TEXT --scope TEXT [--window START/END]   record an authorization the user granted
   decision   --summary TEXT --by user|agent [--adr PATH]
   checkpoint --file PATH                   record a saved checkpoint
-  validate                                 validate state, backlog and UAT files against the schemas
+  validate                                 validate state, backlog, UAT, team and event log files
+  task       TASK --status S [--reason TEXT] [--evidence TYPE:VALUE ...] [--note TEXT]
+                                           set a task's status (evidence: commit:SHA, test:"CMD", file:PATH, ...)
+
+Team mode (when .sancho/team.json exists; see references/team.md):
+  team       add --id ID --name NAME --email EMAIL --roles developer,qa [--coordinator]
+             | list | suggest               members; suggest lists the authors in git log
+  whoami                                   which member you are (SANCHO_USER or git config user.email)
+  claim      TASK [--branch B] [--any-role] take a task; it becomes in_progress and yours
+  release    TASK                          give it back (or acknowledge a lost claim)
+  review     TASK --approve --evidence TYPE:VALUE ... | --changes TEXT   QA review of a ready task
+  next       [--json] [--team] [--as ID]   your next step; --team gives one line per member
 
 Exit codes: 0 ok, 1 refused (gate rules), 2 usage/input error.
 """
@@ -36,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (LEVEL_DEFAULT_SKIPS, PHASE_LEAD, PHASES, SANCHO_DIR, configure_stdout, die,  # noqa: E402
                      find_root, load_json, now_iso, save_json)
 from _schema import validate  # noqa: E402
+import _team  # noqa: E402
 
 GATES = load_json(Path(__file__).resolve().parent / "gates.json")["phases"]
 CLOSED = ("approved", "skipped")
@@ -68,9 +80,44 @@ class Project:
         rel = self.state.get("artifacts", {}).get(key, default)
         return self.root / rel
 
-    def backlog(self) -> dict:
-        p = self.file("backlog", f"{SANCHO_DIR}/backlog.json")
+    def backlog_path(self) -> Path:
+        return self.file("backlog", f"{SANCHO_DIR}/backlog.json")
+
+    def plan_backlog(self) -> dict:
+        """backlog.json as written: the plan, without the team's events."""
+        p = self.backlog_path()
         return load_json(p) if p.is_file() else {"requirements": [], "stories": [], "tasks": []}
+
+    def team(self) -> Optional[dict]:
+        if not hasattr(self, "_team"):
+            try:
+                t = _team.load_team(self.root)
+            except ValueError:
+                t = None
+            self._team = t if t is not None and not validate(t, "team") else None
+        return self._team
+
+    def folded(self) -> Tuple[dict, dict, List[dict]]:
+        """(effective backlog, team view, event-log problems); without a team, the plan as is."""
+        if not hasattr(self, "_folded"):
+            team = self.team()
+            events, problems = _team.read_events(self.root, team) if (team or _team.log_files(self.root)) else ([], [])
+            empty = {"claims": {}, "authors": {}, "last_event": {}, "conflicts": [], "ignored": []}
+            try:
+                plan = self.plan_backlog()
+            except ValueError:  # reported by invalid_files
+                plan = {"requirements": [], "stories": [], "tasks": []}
+            bl, view = plan, empty
+            if team:
+                try:
+                    bl, view = _team.fold(plan, events, set(_team.coordinators(team)))
+                except (KeyError, TypeError):  # an invalid backlog: reported by invalid_files
+                    pass
+            self._folded = (bl, view, problems)
+        return self._folded
+
+    def backlog(self) -> dict:
+        return self.folded()[0]
 
     def uat(self) -> dict:
         p = self.file("uat", f"{SANCHO_DIR}/uat.json")
@@ -81,10 +128,13 @@ class Project:
         return load_json(p) if p.is_file() else None
 
     def documents(self) -> List[Tuple[str, Path]]:
-        return [("state", self.state_path),
-                ("backlog", self.file("backlog", f"{SANCHO_DIR}/backlog.json")),
+        docs = [("state", self.state_path),
+                ("backlog", self.backlog_path()),
                 ("uat", self.file("uat", f"{SANCHO_DIR}/uat.json")),
                 ("security-report", self.file("security_report", "docs/security/security-report.json"))]
+        if _team.team_path(self.root).is_file():
+            docs.append(("team", _team.team_path(self.root)))
+        return docs
 
     def invalid_files(self) -> List[dict]:
         out = []
@@ -92,7 +142,7 @@ class Project:
             errors = file_errors(path, name) if path.is_file() else []
             if errors:
                 out.append({"name": name, "path": path.relative_to(self.root).as_posix(), "errors": errors})
-        return out
+        return out + self.folded()[2]
 
     def save(self) -> None:
         self.state["updated_at"] = now_iso()
@@ -176,12 +226,14 @@ def ready_tasks(backlog: dict) -> List[dict]:
     return sorted(ready, key=lambda t: (story_prio.get(t["story"], 2), t["id"]))
 
 
-def compute_next(p: Project) -> dict:
+def compute_next(p: Project, me: Optional[str] = None) -> dict:
     st = p.state
     invalid = p.invalid_files()
     if invalid:
         paths = ", ".join(f["path"] for f in invalid)
         return {"who": "user", "phase": st.get("current_phase"), "action": f"Repair {paths}: run `state.py validate` to see the errors. The next step cannot be worked out until then."}
+    if me is not None and p.team():
+        return team_next(p, me)
     ph = first_open_phase(st)
     if ph is None:
         return {"who": "user", "phase": None, "action": "All phases are closed. To start the next iteration run `state.py new-iteration`, then /sancho:specify."}
@@ -253,16 +305,378 @@ def next_phase_hint(state: dict, ph: str) -> str:
     return "all phases are closed."
 
 
+# ------------------------------------------------------------------------ team mode
+
+def parents_of(tasks: List[dict]) -> set:
+    return {t.get("parent") for t in tasks if t.get("parent")}
+
+
+def team_next(p: Project, me: str) -> dict:
+    """The next step for one member (references/team.md has the order)."""
+    st, team = p.state, p.team()
+    assert team is not None
+    bl, view, _ = p.folded()
+    ph = first_open_phase(st)
+    roles = _team.roles_of(team, me)
+    tasks = bl.get("tasks", [])
+    claims = view["claims"]
+
+    def mk(action: str, who: str = me) -> dict:
+        return {"who": who, "member": me, "mine": who == me, "phase": ph, "action": action}
+
+    lost = [c for c in view["conflicts"] if c["lost"] == me]
+    if lost:
+        c = lost[0]
+        return mk(f"{c['task']} was already claimed by {c['won']} ({c['won_at']}) before your claim. Agree with "
+                  f"{c['won']}, who keeps it, then run `state.py release {c['task']}` to clear this.")
+    if ph != "implement" or st["phases"][ph]["status"] in ("not_started", "awaiting_approval"):
+        return mapped_next(p, me)
+    mine = [t for t in tasks if claims.get(t["id"], {}).get("by") == me]
+    for t in mine:
+        if t["status"] == "in_progress":
+            notes = f" The review asked for changes: {t['review_notes']}" if t.get("review_notes") else ""
+            return mk(f"Continue {t['id']} [{t['story']}]: {t['title']}.{notes} When done: "
+                      f"`state.py task {t['id']} --status ready_for_review --evidence ...`.")
+    for t in mine:
+        if t["status"] == "blocked":
+            return mk(f"Unblock {t['id']}: {t.get('blocked_reason', '')} (or `state.py release {t['id']}`).")
+    if "qa" in roles:
+        four = team.get("four_eyes", True)
+        for t in tasks:
+            authors = view["authors"].get(t["id"], [])
+            if t["status"] == "ready_for_review" and not (four and me in authors):
+                by = f", by {', '.join(authors)}" if authors else ""
+                return mk(f"Review {t['id']} [{t['story']}]: {t['title']}{by}. Then `state.py review {t['id']} "
+                          f"--approve --evidence ...` or `--changes \"...\"`.")
+    rank = {me: 0, None: 1}
+    ready = [t for t in ready_tasks(bl) if t["id"] not in claims and t["owner"] in roles
+             and t.get("assignee") in (me, None)]
+    ready.sort(key=lambda t: rank[t.get("assignee")])  # stable: keeps the priority order
+    if ready:
+        t = ready[0]
+        return mk(f"Claim {t['id']} [{t['story']}]: {t['title']} (complexity {t['complexity']['score']}): "
+                  f"`state.py claim {t['id']}`, then implement it.")
+    parents = parents_of(tasks)
+    left = [t for t in tasks if t["status"] != "completed" and t["id"] not in parents]
+    if not left:
+        return mapped_next(p, me)
+    busy = [f"{t['id']} ({claims[t['id']]['by']}, {t['status']})" for t in left if t["id"] in claims]
+    waiting = [t["id"] for t in mine if t["status"] == "ready_for_review"]
+    unclaimed = [f"{t['id']} ({t.get('assignee') or t['owner']})" for t in ready_tasks(bl) if t["id"] not in claims]
+    parts = []
+    if waiting:
+        parts.append(f"your {', '.join(waiting)} waits for review")
+    if busy:
+        parts.append("in progress: " + ", ".join(busy))
+    if unclaimed:
+        parts.append("ready for others: " + ", ".join(unclaimed))
+    blocked_by_deps = [t["id"] for t in left if t["status"] == "pending" and t["id"] not in claims
+                       and t not in ready_tasks(bl)]
+    if blocked_by_deps:
+        parts.append("waiting on dependencies: " + ", ".join(blocked_by_deps))
+    return {**mk("Nothing ready for you right now: " + "; ".join(parts) + "."), "mine": False}
+
+
+def mapped_next(p: Project, me: str) -> dict:
+    """The project's next step, said to one member: theirs, or whose it is."""
+    team = p.team()
+    assert team is not None
+    base = compute_next(p)
+    st = p.state
+    who = base["who"]
+    leads = _team.coordinators(team)
+    if who == "user":
+        ph = base.get("phase")
+        gate = ph and st["phases"].get(ph, {}).get("status") == "awaiting_approval"
+        holders = leads if gate or ph is None or base["action"].startswith("Start ") else [m["id"] for m in team["members"]]
+    else:
+        holders = _team.holders_of_role(team, who) or leads
+    if base["action"].startswith("Start "):
+        holders = leads  # the coordinator opens phases
+    out = {**base, "member": me, "role": who}
+    if me in holders:
+        return {**out, "who": me, "mine": True}
+    return {**out, "who": ", ".join(holders), "mine": False,
+            "action": f"Nothing for you right now: {', '.join(holders)} ({who}): {base['action']}"}
+
+
+def team_overview(p: Project) -> dict:
+    team = p.team()
+    assert team is not None
+    bl, view, _ = p.folded()
+    per_member = {m["id"]: team_next(p, m["id"]) for m in team["members"]}
+    free = [t["id"] for t in ready_tasks(bl) if t["id"] not in view["claims"]]
+    return {"members": per_member, "free": free, "conflicts": view["conflicts"],
+            "stale": _team.stale(view, team), "claims": view["claims"]}
+
+
+def current_member(p: Project, wanted: Optional[str] = None) -> Tuple[Optional[str], str]:
+    team = p.team()
+    if team is None:
+        return None, "no team"
+    if wanted:
+        if wanted not in _team.members(team):
+            die(f"{wanted} is not a member of the team")
+        return wanted, "--as"
+    return _team.whoami(p.root, team)
+
+
+def require_member(p: Project) -> Tuple[dict, str]:
+    if _team.team_path(p.root).is_file() and p.team() is None:
+        die("invalid .sancho/team.json: run `state.py validate`", 1)
+    team = p.team()
+    if team is None:
+        die("team mode is off: .sancho/team.json does not exist (add members with `state.py team add`)", 1)
+    me, how = _team.whoami(p.root, team)
+    if me is None:
+        die(f"who are you? {how}", 1)
+    return team, me  # type: ignore[return-value]
+
+
+def find_task(bl: dict, tid: str) -> dict:
+    for t in bl.get("tasks", []):
+        if t["id"] == tid:
+            return t
+    die(f"task {tid} not found in the backlog")
+    raise AssertionError
+
+
 def cmd_next(a: argparse.Namespace) -> int:
     root = find_root()
     if root is None:
+        if a.team or a.as_:
+            die("no .sancho/ folder found here or above")
         nxt = {"who": "user", "phase": "discover", "action": "No Sancho project here yet. Run /sancho:help for a tour, or /sancho:discover to start."}
     else:
-        nxt = compute_next(Project(root))
+        p = Project(root)
+        if (a.team or a.as_) and p.team() is None:
+            die("team mode is off: .sancho/team.json does not exist", 1)
+        if a.team:
+            ov = team_overview(p)
+            if a.json:
+                print(json.dumps(ov, indent=2, ensure_ascii=False))
+                return 0
+            for mid, n in ov["members"].items():
+                print(f"{mid}: {n['action']}")
+            if ov["free"]:
+                print(f"free: {', '.join(ov['free'])} (ready, nobody has claimed them)")
+            for c in ov["conflicts"]:
+                print(f"CONFLICT: {c['task']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
+            for tid in ov["stale"]:
+                print(f"STALE: {tid} claimed by {ov['claims'][tid]['by']}, no activity for a while")
+            return 0
+        me, how = current_member(p, a.as_)
+        nxt = compute_next(p, me)
+        if p.team() is not None and me is None:
+            nxt["note"] = f"team mode: {how}; this is the project's next step, not yours"
     if a.json:
         print(json.dumps(nxt, indent=2, ensure_ascii=False))
     else:
         print(f"NEXT ({nxt['who']}): {nxt['action']}")
+        if nxt.get("note"):
+            print(f"note: {nxt['note']}")
+    return 0
+
+
+def cmd_whoami(a: argparse.Namespace) -> int:
+    p = open_project()
+    team = p.team()
+    if team is None:
+        print("team mode is off (no .sancho/team.json): Sancho works for one person")
+        return 0
+    me, how = _team.whoami(p.root, team)
+    if me is None:
+        print(f"not a member: {how}")
+        return 1
+    m = _team.members(team)[me]
+    print(f"{me} ({m['name']}) · roles: {', '.join(m['roles'])}" + (" · coordinator" if me in _team.coordinators(team) else "") + f" · from {how}")
+    return 0
+
+
+def cmd_team(a: argparse.Namespace) -> int:
+    root = find_root()
+    if root is None:
+        die("no .sancho/ folder found here or above: run `state.py init` first")
+    path = _team.team_path(root)
+    if a.action == "suggest":
+        log = _team.git(root, "log", "--format=%aN|%aE")
+        counts: Dict[Tuple[str, str], int] = {}
+        for line in log.splitlines():
+            name, _, email = line.partition("|")
+            counts[(name, email.lower())] = counts.get((name, email.lower()), 0) + 1
+        team = _team.load_team(root) if path.is_file() else None
+        known = {e.lower() for m in (team or {}).get("members", []) for e in m["emails"]}
+        if not counts:
+            print("no git history here: add members with `state.py team add`")
+        for (name, email), n in sorted(counts.items(), key=lambda x: -x[1]):
+            print(f"{name} <{email}> · {n} commit(s)" + (" · already a member" if email in known else ""))
+        return 0
+    team = _team.load_team(root) if path.is_file() else {"protocol": "sancho/1.1", "members": []}
+    if a.action == "list":
+        if not team["members"]:
+            print("no team (team mode is off)")
+            return 0
+        me, _ = _team.whoami(root, team)
+        leads = _team.coordinators(team)
+        for m in team["members"]:
+            print(f"{m['id']}: {m['name']} <{', '.join(m['emails'])}> · {', '.join(m['roles'])}"
+                  + (" · coordinator" if m["id"] in leads else "") + (" · you" if m["id"] == me else ""))
+        return 0
+    # add (or update) a member
+    if not (a.id and a.name and a.email and a.roles):
+        die("team add needs --id, --name, --email and --roles")
+    roles = [r.strip() for r in a.roles.split(",") if r.strip()]
+    existing = _team.members(team).get(a.id)
+    if existing:
+        existing.update({"name": a.name, "roles": roles})
+        if a.email.lower() not in (e.lower() for e in existing["emails"]):
+            existing["emails"].append(a.email)
+    else:
+        team["members"].append({"id": a.id, "name": a.name, "emails": [a.email], "roles": roles})
+    member = _team.members(team)[a.id]
+    if a.coordinator:  # without any, the first member coordinates (see _team.coordinators)
+        member["coordinator"] = True
+    errors = validate(team, "team")
+    if errors:
+        die("invalid member:\n  " + "\n  ".join(errors[:5]))
+    save_json(path, team)
+    added = _team.ensure_union_merge(root)
+    print(f"{'updated' if existing else 'added'} {a.id} ({', '.join(roles)})" + (" · coordinator" if a.id in _team.coordinators(team) else ""))
+    if added:
+        print("added `.sancho/log/*.jsonl merge=union` to .gitattributes")
+    print("Commit .sancho/team.json and .gitattributes so the others get the team.")
+    return 0
+
+
+def cmd_claim(a: argparse.Namespace) -> int:
+    p = open_project()
+    team, me = require_member(p)
+    bl, view, _ = p.folded()
+    t = find_task(bl, a.task)
+    if a.task in parents_of(bl.get("tasks", [])):
+        die(f"{a.task} was split into subtasks: claim one of those", 1)
+    holder = view["claims"].get(a.task)
+    if holder:
+        if holder["by"] == me:
+            die(f"{a.task} is already yours", 1)
+        die(f"{a.task} is already claimed by {holder['by']} since {holder['at']}" + (f" (branch {holder['branch']})" if holder.get("branch") else ""), 1)
+    if t["status"] not in ("pending", "in_progress", "failed"):
+        die(f"{a.task} is {t['status']}", 1)
+    status_of = {x["id"]: x["status"] for x in bl.get("tasks", [])}
+    open_deps = [d for d in t.get("depends_on", []) if status_of.get(d) != "completed"]
+    if open_deps:
+        die(f"{a.task} depends on {', '.join(open_deps)}, not completed yet", 1)
+    roles = _team.roles_of(team, me)
+    if t["owner"] not in roles and not a.any_role:
+        die(f"{a.task} is a {t['owner']} task and your roles are {', '.join(roles)}; pass --any-role if the team agreed", 1)
+    branch = a.branch or _team.git(p.root, "rev-parse", "--abbrev-ref", "HEAD")
+    ev = {"by": me, "event": "claim", "task": a.task}
+    if branch and branch != "HEAD":
+        ev["branch"] = branch
+    path = _team.append_event(p.root, ev)
+    print(f"{a.task} claimed by {me}: in progress" + (f" on branch {ev['branch']}" if "branch" in ev else ""))
+    if t.get("assignee") and t["assignee"] != me:
+        print(f"note: the plan suggested {t['assignee']} for {a.task}")
+    print(f"Commit and push {path.relative_to(p.root).as_posix()} now, so the others see the claim (ask the user first).")
+    return 0
+
+
+def cmd_release(a: argparse.Namespace) -> int:
+    p = open_project()
+    team, me = require_member(p)
+    bl, view, _ = p.folded()
+    find_task(bl, a.task)
+    holder = view["claims"].get(a.task, {}).get("by")
+    lost = [c for c in view["conflicts"] if c["task"] == a.task and c["lost"] == me]
+    if not (lost or holder == me or (holder and me in _team.coordinators(team))):
+        die(f"{a.task} is not yours" + (f" (claimed by {holder})" if holder else " (nobody has claimed it)"), 1)
+    _team.append_event(p.root, {"by": me, "event": "release", "task": a.task})
+    if lost and holder != me:
+        print(f"conflict on {a.task} cleared: {holder} keeps it")
+    else:
+        print(f"{a.task} released" + (f" (it was {holder}'s)" if holder != me else "") + ": back to pending")
+    return 0
+
+
+def cmd_task(a: argparse.Namespace) -> int:
+    p = open_project()
+    try:
+        evidence = _team.parse_evidence(a.evidence or [])
+    except ValueError as e:
+        die(str(e))
+    if a.status == "blocked" and not a.reason:
+        die("--status blocked needs --reason")
+    if _team.team_path(p.root).is_file():
+        team, me = require_member(p)
+        bl, view, _ = p.folded()
+        t = find_task(bl, a.task)
+        holder = view["claims"].get(a.task, {}).get("by")
+        if holder != me:
+            die(f"{a.task} is not yours: " + (f"claimed by {holder}" if holder else f"claim it first (`state.py claim {a.task}`)"), 1)
+        if a.status == "completed":
+            die("in a team a task is completed by a review: `state.py review TASK --approve` (by someone else with the qa role)", 1)
+        if a.status == "pending":
+            die(f"to give a task back use `state.py release {a.task}`", 1)
+        if a.status == "ready_for_review" and not evidence:
+            die("--status ready_for_review needs --evidence (for example commit:SHA or test:\"CMD\")")
+        ev: dict = {"by": me, "event": "task_status", "task": a.task, "status": a.status}
+        if a.reason:
+            ev["blocked_reason"] = a.reason
+        if evidence:
+            ev["evidence"] = evidence
+        if a.note:
+            ev["note"] = a.note
+        _team.append_event(p.root, ev)
+        print(f"{a.task}: {t['status']} -> {a.status}")
+        return 0
+    if a.note:
+        die("--note is kept only in team mode; put it in the handoff instead")
+    bl = p.plan_backlog()
+    t = find_task(bl, a.task)
+    old = t["status"]
+    t["status"] = a.status
+    if a.status == "blocked":
+        t["blocked_reason"] = a.reason
+    else:
+        t.pop("blocked_reason", None)
+    if evidence:
+        t["evidence"] = t.get("evidence", []) + evidence
+    if a.status in ("ready_for_review", "completed") and not t.get("evidence"):
+        die(f"--status {a.status} needs --evidence (for example commit:SHA or test:\"CMD\")")
+    errors = validate(bl, "backlog")
+    if errors:
+        die("refusing to write an invalid backlog:\n  " + "\n  ".join(errors[:10]))
+    save_json(p.backlog_path(), bl)
+    print(f"{a.task}: {old} -> {a.status}")
+    return 0
+
+
+def cmd_review(a: argparse.Namespace) -> int:
+    p = open_project()
+    team, me = require_member(p)
+    bl, view, _ = p.folded()
+    t = find_task(bl, a.task)
+    if "qa" not in _team.roles_of(team, me):
+        die(f"reviews are for members with the qa role; {me} has {', '.join(_team.roles_of(team, me))}", 1)
+    if t["status"] != "ready_for_review":
+        die(f"{a.task} is {t['status']}, not ready_for_review", 1)
+    if team.get("four_eyes", True) and me in view["authors"].get(a.task, []):
+        die(f"you worked on {a.task}: someone else with the qa role reviews it (four eyes)", 1)
+    if bool(a.approve) == bool(a.changes):
+        die("pass --approve (with --evidence) or --changes TEXT")
+    ev: dict = {"by": me, "event": "review", "task": a.task}
+    if a.approve:
+        try:
+            evidence = _team.parse_evidence(a.evidence or [])
+        except ValueError as e:
+            die(str(e))
+        if not evidence:
+            die("--approve needs --evidence: what you re-ran or checked")
+        ev.update({"outcome": "approved", "evidence": evidence})
+    else:
+        ev.update({"outcome": "changes", "note": a.changes})
+    _team.append_event(p.root, ev)
+    print(f"{a.task}: " + ("completed (review approved)" if a.approve else "back to in_progress with your findings"))
     return 0
 
 
@@ -327,8 +741,20 @@ def cmd_status(a: argparse.Namespace) -> int:
         "approvals": len(st.get("approvals", [])),
         "last_checkpoint": (st.get("checkpoints") or [{}])[-1].get("at"),
         "invalid_files": invalid,
-        "next": compute_next(p),
     }
+    team = p.team()
+    me = None
+    if team is not None:
+        me, how = _team.whoami(p.root, team)
+        _, view, _ = p.folded()
+        data["team"] = {
+            "me": me, "identity": how,
+            "members": [m["id"] for m in team["members"]],
+            "claims": {tid: {**c, "status": next((t["status"] for t in backlog.get("tasks", []) if t["id"] == tid), None)}
+                       for tid, c in view["claims"].items()},
+            "conflicts": view["conflicts"], "stale": _team.stale(view, team),
+        }
+    data["next"] = compute_next(p, me)
     code = 1 if invalid else 0
     if a.json:
         print(json.dumps(data, indent=2, ensure_ascii=False))
@@ -353,6 +779,17 @@ def cmd_status(a: argparse.Namespace) -> int:
               + (f" · NOT RUN: {len(s['not_run'])}" if s["not_run"] else ""))
     for b in blockers:
         print(f"BLOCKER: {b}")
+    if "team" in data:
+        tm = data["team"]
+        by: Dict[str, List[str]] = {}
+        for tid, c in sorted(tm["claims"].items()):
+            by.setdefault(c["by"], []).append(f"{tid} {c['status']}")
+        print("team:   " + " · ".join(f"{m}: {', '.join(by.get(m, [])) or 'free'}" for m in tm["members"])
+              + f" (you: {tm['me'] or 'not a member: ' + tm['identity']})")
+        for c in tm["conflicts"]:
+            print(f"CONFLICT: {c['task']} claimed by {c['won']} and later by {c['lost']}; {c['won']} keeps it")
+        for tid in tm["stale"]:
+            print(f"STALE: {tid} claimed by {tm['claims'][tid]['by']}, no activity for a while")
     if data["last_checkpoint"]:
         print(f"last checkpoint: {data['last_checkpoint']}")
     print(f"NEXT ({data['next']['who']}): {data['next']['action']}")
@@ -596,6 +1033,14 @@ def cmd_validate(a: argparse.Namespace) -> int:
         print(f"{'ok  ' if not errors else 'FAIL'} handoff: {h.relative_to(p.root)}")
         for e in errors[:10]:
             print(f"     {e}")
+    bad_logs = {f["path"]: f["errors"] for f in p.folded()[2]}
+    for f in _team.log_files(p.root):
+        rel = f.relative_to(p.root).as_posix()
+        errors = bad_logs.get(rel, [])
+        ok = ok and not errors
+        print(f"{'ok  ' if not errors else 'FAIL'} event-log: {rel}")
+        for e in errors[:10]:
+            print(f"     {e}")
     return 0 if ok else 1
 
 
@@ -610,9 +1055,37 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--language", default="en")
     s.add_argument("--threshold", type=int, default=7)
     s.add_argument("--summary")
-    for name in ("status", "next"):
-        s = sub.add_parser(name)
-        s.add_argument("--json", action="store_true")
+    s = sub.add_parser("status")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("next")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--team", action="store_true", help="team mode: one line per member")
+    s.add_argument("--as", dest="as_", metavar="ID", help="team mode: the next step of another member")
+    s = sub.add_parser("team")
+    s.add_argument("action", choices=["add", "list", "suggest"])
+    s.add_argument("--id")
+    s.add_argument("--name")
+    s.add_argument("--email")
+    s.add_argument("--roles", help="comma separated: analyst-pm,ux-ui-designer,architect,developer,qa,security,release-manager")
+    s.add_argument("--coordinator", action="store_true")
+    sub.add_parser("whoami")
+    s = sub.add_parser("claim")
+    s.add_argument("task")
+    s.add_argument("--branch")
+    s.add_argument("--any-role", action="store_true")
+    s = sub.add_parser("release")
+    s.add_argument("task")
+    s = sub.add_parser("task")
+    s.add_argument("task")
+    s.add_argument("--status", required=True, choices=["pending", "in_progress", "blocked", "ready_for_review", "completed", "failed"])
+    s.add_argument("--reason")
+    s.add_argument("--evidence", action="append")
+    s.add_argument("--note")
+    s = sub.add_parser("review")
+    s.add_argument("task")
+    s.add_argument("--approve", action="store_true")
+    s.add_argument("--changes")
+    s.add_argument("--evidence", action="append")
     s = sub.add_parser("checklist")
     s.add_argument("phase", choices=PHASES)
     s = sub.add_parser("start")

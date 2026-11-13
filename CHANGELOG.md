@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Team mode, first stage (design: `docs/design/team-mode.md`). When `.sancho/team.json` exists, several people share a project from their own clones: each member is recognized by `git config user.email` (or `SANCHO_USER`); task states are appended to a per-member event log, `.sancho/log/<member>.jsonl`, so merging the members' work never conflicts on Sancho's state (`.gitattributes` gets `merge=union` for a member working from two computers); the current state is the backlog plus every event. New `state.py` commands: `team add|list|suggest`, `whoami`, `claim` and `release` (one task, one person; a contested claim goes to the earliest and the other member is told), `review --approve|--changes` (qa role, four eyes: not by whoever worked on the task). `next` answers for the member who asks, `next --team` gives one line per member, `status` shows who holds what, conflicts and stale claims. New schemas `team` and `event`, optional `task.assignee`, rules for the model in `references/team.md`. Without `team.json` nothing changes. Checks: `team_merges_without_conflicts` (three people, four clones, merged in turn), `team_contested_claim`, `team_four_eyes_and_review`, `solo_mode_unchanged_with_task_command`.
+- `state.py task TASK --status ... [--evidence TYPE:VALUE]`: task status changes through a validated command, also for one person, instead of editing `backlog.json` by hand.
+
 ## [1.0.0] - 2026-11-12
 
 First public release.

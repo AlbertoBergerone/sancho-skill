@@ -92,6 +92,8 @@ Execution depends on the environment (details: `references/orchestration.md`):
 - **Claude Code with the Sancho plugin:** delegate production work to the subagents `sancho:<role>` (for example `sancho:developer`). Subagents cannot talk to the user, so interviews, choices and approvals stay in the main session. Give each subagent a self-contained brief: objective, the absolute path of this skill directory, the files to read (role, phase reference, standards, story context), constraints, and where to write its handoff.
 - **Anywhere else** (Claude apps, skill installed without the plugin): play the roles in sequence yourself. Read the role file before acting as that role, and announce the switch in one short line ("Architect hat on.").
 
+**Team mode:** if `.sancho/team.json` exists, several people share the project: read `references/team.md` before changing any task state, and give each person their own next step.
+
 Every delegation ends with a handoff (`schemas/handoff.schema.json`, saved in `.sancho/handoffs/`). The receiver treats its claims as REPORTED until it has checked the key evidence (re-run the main test, open the file).
 
 ## 5. Core rules
@@ -144,6 +146,7 @@ design/                   tokens.json, logo SVGs, wireframes
 | `references/gates.md` | closing any phase |
 | `references/taxonomy.md` | evidence, levels, severities, statuses, glossary rules |
 | `references/orchestration.md` | delegating to roles or subagents, handoffs |
+| `references/team.md` | `.sancho/team.json` exists: several people, claims, reviews, per-person next step |
 | `references/coding-guardrails.md` | IMPLEMENT, fixes, any code change |
 | `references/standards.md` | creating, loading or extracting project standards |
 | `references/stack-decision.md` | PLAN stack matrix and container decision tree |

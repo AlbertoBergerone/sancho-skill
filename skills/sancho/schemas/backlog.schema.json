@@ -87,6 +87,7 @@
               "rationale": { "type": "string" }
             }
           },
+          "assignee": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "Team mode: the member planned for this task (a suggestion; the claim in the event log decides)." },
           "blocked_reason": { "type": "string" },
           "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
         },
