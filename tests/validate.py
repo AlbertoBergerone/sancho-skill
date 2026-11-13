@@ -1072,6 +1072,86 @@ def team_verify_and_compact() -> None:
         assert "nothing to compact" in run_as("danilo", "state.py", "compact", cwd=t).stdout
 
 
+def team_remote(base: Path, names: Tuple[str, ...]) -> Dict[str, Path]:
+    """origin.git seeded with a team project, plus one clone per name (git identity = name)."""
+    git_in(base, "init", "--bare", "origin.git")
+    seed = base / "seed"
+    seed.mkdir()
+    git_in(seed, "init")
+    team_project(seed)
+    git_in(seed, "add", "-A")
+    git_in(seed, "-c", "user.name=seed", "-c", "user.email=seed@example.com", "commit", "-m", "seed")
+    git_in(seed, "push", str(base / "origin.git"), "HEAD:main")
+    out = {}
+    for name in names:
+        git_in(base, "clone", "-b", "main", str(base / "origin.git"), name)
+        git_in(base / name, "config", "user.email", f"{name}@example.com")
+        git_in(base / name, "config", "user.name", name)
+        out[name] = base / name
+    return out
+
+
+def push(cwd: Path, msg: str) -> None:
+    git_in(cwd, "add", "-A")
+    git_in(cwd, "commit", "-m", msg)
+    git_in(cwd, "pull", "--no-rebase", "--no-edit", "origin", "main")
+    git_in(cwd, "push", "origin", "HEAD:main")
+
+
+@check
+def team_since_and_hook() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        c = team_remote(Path(tmp), ("luca", "danilo"))
+        luca, danilo = c["luca"], c["danilo"]
+        assert "first look" in run_as("luca", "state.py", "since", cwd=luca).stdout
+        assert run_as("luca", "state.py", "claim", "T-001", cwd=luca).returncode == 0
+        assert run_as("luca", "state.py", "task", "T-001", "--status", "ready_for_review", "--evidence", "commit:abcdef1", cwd=luca).returncode == 0
+        push(luca, "luca: T-001 ready")
+        assert "nothing new" in run_as("luca", "state.py", "since", cwd=luca).stdout
+        git_in(danilo, "pull", "--no-rebase", "--no-edit", "origin", "main")
+        assert run_as("danilo", "state.py", "review", "T-001", "--changes", "add the offline test", cwd=danilo).returncode == 0
+        assert run_as("danilo", "state.py", "claim", "T-002", cwd=danilo).returncode == 0
+        push(danilo, "danilo: review T-001")
+        # luca installs the hook, then pulls: the hook prints what changed
+        r = run_as("luca", "state.py", "hooks", "install", cwd=luca)
+        assert r.returncode == 0, r.stderr
+        assert "installed" in run_as("luca", "state.py", "hooks", "status", cwd=luca).stdout
+        env = {**__import__("os").environ, "SANCHO_USER": "luca"}
+        pull = subprocess.run(["git", "pull", "--no-rebase", "--no-edit", "origin", "main"], cwd=str(luca),
+                              capture_output=True, text=True, encoding="utf-8", env=env)
+        assert pull.returncode == 0, pull.stderr
+        hook_out = pull.stdout + pull.stderr
+        assert "FOR YOU: danilo asked for changes on T-001: add the offline test" in hook_out, hook_out
+        assert "danilo: asked for changes on T-001" in hook_out and "took T-002" in hook_out, hook_out
+        # the hook moved the marker: nothing new now; an explicit reference still works
+        assert "nothing new" in run_as("luca", "state.py", "since", cwd=luca).stdout
+        out = json.loads(run_as("luca", "state.py", "since", "HEAD~1", "--json", "--peek", cwd=luca).stdout)
+        assert out["by_member"]["danilo"] == ["asked for changes on T-001: add the offline test", "took T-002"], out
+        assert run_as("luca", "state.py", "hooks", "remove", cwd=luca).returncode == 0
+        assert "not installed" in run_as("luca", "state.py", "hooks", "status", cwd=luca).stdout
+
+
+@check
+def renumber_duplicate_ids() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t, team=False)
+        bl = load(t / ".sancho/backlog.json")
+        dup = dict(bl["tasks"][1], title="the other T-002, added in parallel")
+        bl["tasks"].append(dup)
+        bl["tasks"].append(dict(bl["tasks"][0], id="T-006", depends_on=["T-002"]))
+        (t / ".sancho/backlog.json").write_text(json.dumps(bl, indent=2), encoding="utf-8")
+        r = run("state.py", "renumber", cwd=t)
+        assert "tasks: second T-002 -> T-007" in r.stdout and "dry run" in r.stdout, r.stdout
+        assert "T-006 refers to T-002" in r.stdout, r.stdout
+        assert load(t / ".sancho/backlog.json") == bl, "a dry run changes nothing"
+        assert run("state.py", "renumber", "--apply", cwd=t).returncode == 0
+        ids = [x["id"] for x in load(t / ".sancho/backlog.json")["tasks"]]
+        assert ids == ["T-001", "T-002", "T-003", "T-004", "T-007", "T-006"], ids
+        assert "no duplicate ids" in run("state.py", "renumber", cwd=t).stdout
+        assert run("state.py", "validate", cwd=t).returncode == 0
+
+
 @check
 def panel_wired() -> None:
     # The plugin's panel (band, toasts, details pane) for the Claude app and Claude Code; not in the ZIP.

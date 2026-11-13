@@ -34,6 +34,9 @@ Team mode (when .sancho/team.json exists; see references/team.md):
                                            record a UAT result (also without a team; --tester NAME)
   defect     DEF --status open|fixed|verified|wont_fix [--task T-012]   (also without a team)
   compact                                  coordinator: archive the events of settled items, state unchanged
+  since      [REF] [--json] [--peek]       what changed since you last looked (git): commits, events, phases, files
+  hooks      install|remove|status [--force]   post-merge hook: `since` and `validate` after every pull
+  renumber   [--apply]                     rename duplicate ids after a merge (dry run without --apply)
   Gates: the coordinator starts and submits; approvers (team.json approvers/quorum) approve or reject.
 
 Exit codes: 0 ok, 1 refused (gate rules), 2 usage/input error.
@@ -53,6 +56,7 @@ from _common import (LEVEL_DEFAULT_SKIPS, PHASE_LEAD, PHASES, SANCHO_DIR, config
                      find_root, load_json, now_iso, save_json)
 from _schema import validate  # noqa: E402
 import _team  # noqa: E402
+import _since  # noqa: E402
 
 GATES = load_json(Path(__file__).resolve().parent / "gates.json")["phases"]
 CLOSED = ("approved", "skipped")
@@ -747,6 +751,124 @@ def cmd_release(a: argparse.Namespace) -> int:
         print(f"conflict on {a.task} cleared: {holder} keeps it")
     else:
         print(f"{a.task} released" + (f" (it was {holder}'s)" if holder != me else "") + (": back to pending" if key == "task" else ""))
+    return 0
+
+
+def cmd_since(a: argparse.Namespace) -> int:
+    """What changed since you last looked (or since REF): commits, team events, phases, documents."""
+    p = open_project()
+    team = p.team()
+    me = _team.whoami(p.root, team)[0] if team else None
+    mine_items: set = set()
+    if me:
+        _, view, _ = p.folded()
+        mine_items = {i for i, c in view["claims"].items() if c["by"] == me}
+        mine_items |= {i for i, who in view["authors"].items() if me in who}
+    try:
+        emails = set(_team.members(team)[me]["emails"]) if team and me else set()
+        out = _since.compute(p.root, a.ref, me, mine_items, emails)
+    except RuntimeError as e:
+        die(str(e))
+    if not a.peek:
+        _since.write_marker(p.root, _team.git(p.root, "rev-parse", "HEAD"))
+    if a.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
+    if out["first_run"]:
+        print("since: first look; from now on `since` shows what changed after this point")
+        return 0
+    if not (out["commits"] or out["phases"] or out["by_member"] or out["files"]):
+        print(f"since {out['from']}: nothing new")
+        return 0
+    authors = sorted({c["author"] for c in out["commits"]})
+    print(f"since {out['from']}: {len(out['commits'])} commit(s)" + (f" by {', '.join(authors)}" if authors else ""))
+    if out["mine"]:
+        print("FOR YOU: " + " · ".join(out["mine"]))
+    for ph in out["phases"]:
+        print(f"phase:  {ph['phase']} {ph['from'] or '-'} -> {ph['to']}")
+    for who, items in out["by_member"].items():
+        print(f"{who}: " + " · ".join(items))
+    if out["files"]:
+        print("files:  " + ", ".join(f"{f['path']} ({f['change']})" for f in out["files"][:12])
+              + (f" and {len(out['files']) - 12} more" if len(out["files"]) > 12 else ""))
+    return 0
+
+
+def cmd_hooks(a: argparse.Namespace) -> int:
+    p = open_project()
+    if a.action == "install":
+        ok, msg = _since.install_hook(p.root, Path(__file__).resolve(), a.force)
+        if not ok:
+            die(msg, 1)
+        print(f"post-merge hook installed: {msg}")
+        print("After every pull it prints `state.py since` and checks the project files. "
+              "Each member installs it in their own clone; re-run after updating Sancho.")
+    elif a.action == "remove":
+        ok, msg = _since.remove_hook(p.root)
+        print(("removed " if ok else "") + msg)
+    else:
+        path = _since.hook_path(p.root)
+        ours = bool(path and path.is_file() and _since.HOOK_MARK in path.read_text(encoding="utf-8", errors="replace"))
+        print(f"post-merge hook: {'installed' if ours else 'not installed'}" + (f" ({path})" if ours else ""))
+    return 0
+
+
+ID_KINDS = (("requirements", "R"), ("stories", "S"), ("tasks", "T"))
+
+
+def cmd_renumber(a: argparse.Namespace) -> int:
+    """Rename duplicate ids (two members added S-012 in parallel): the later occurrence gets the next free id."""
+    p = open_project()
+    if a.apply:
+        coordinator_only(p, "renumbers ids")
+    bl, ua = p.plan_backlog(), p.plan_uat()
+    _, view, _ = p.folded()
+    plan: List[Tuple[str, str, str]] = []
+    refs: List[str] = []
+    docs = [(bl, kind, pfx) for kind, pfx in ID_KINDS] + [(ua, "cases", "UAT"), (ua, "defects", "DEF")]
+    for doc, kind, pfx in docs:
+        items = doc.get(kind, [])
+        taken = {x["id"] for x in items}
+        seen: set = set()
+        for x in items:
+            if x["id"] not in seen:
+                seen.add(x["id"])
+                continue
+            nums = [int(re.match(rf"^{pfx}-(\d+)", i).group(1)) for i in taken if re.match(rf"^{pfx}-(\d+)", i)]  # type: ignore[union-attr]
+            new = f"{pfx}-{max(nums) + 1:03d}"
+            taken.add(new)
+            plan.append((kind, x["id"], new))
+            old = x["id"]
+            x["id"] = new
+            if kind == "stories":
+                for c in x.get("acceptance_criteria", []):
+                    c["id"] = c["id"].replace(f"AC-{old[2:]}.", f"AC-{new[2:]}.", 1)
+            if old in view["claims"] or old in view["authors"]:
+                refs.append(f"{old} has team events: they stay with the first {old}; tell whoever worked on the renamed one")
+            for other in bl.get("tasks", []) + ua.get("cases", []) + ua.get("defects", []):
+                if other is x:
+                    continue
+                if old in other.get("depends_on", []) or other.get("story") == old or other.get("task") == old \
+                        or other.get("parent") == old or old in other.get("defects", []):
+                    refs.append(f"{other['id']} refers to {old}: check whether it meant the renamed {new}")
+    if not plan:
+        print("no duplicate ids")
+        return 0
+    for kind, old, new in plan:
+        print(f"{kind}: second {old} -> {new}")
+    for r in refs:
+        print(f"CHECK: {r}")
+    if not a.apply:
+        print("dry run: nothing changed; run again with --apply")
+        return 0
+    for doc, name in ((bl, "backlog"), (ua, "uat")):
+        errors = validate(doc, name)
+        if errors:
+            die(f"renumbering would make {name} invalid, nothing changed:\n  " + "\n  ".join(errors[:10]))
+    save_json(p.backlog_path(), bl)
+    if p.uat_path().is_file():
+        save_json(p.uat_path(), ua)
+    print("renumbered; run the coherence check (`coherence_check.py`) and fix the references listed under CHECK")
     return 0
 
 
@@ -1519,6 +1641,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--task", help="the fix task, e.g. T-012")
     s.add_argument("--note")
     sub.add_parser("compact")
+    s = sub.add_parser("since")
+    s.add_argument("ref", nargs="?", help="a git reference; default: where you last looked")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--peek", action="store_true", help="do not move the 'last seen' marker")
+    s = sub.add_parser("hooks")
+    s.add_argument("action", choices=["install", "remove", "status"])
+    s.add_argument("--force", action="store_true")
+    s = sub.add_parser("renumber")
+    s.add_argument("--apply", action="store_true")
     s = sub.add_parser("checklist")
     s.add_argument("phase", choices=PHASES)
     s = sub.add_parser("start")

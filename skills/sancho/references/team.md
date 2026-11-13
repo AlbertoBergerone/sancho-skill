@@ -8,7 +8,7 @@ Read this when `.sancho/team.json` exists: several people work on the project, e
 - **Who is speaking** is the member whose email matches `git config user.email`, or `SANCHO_USER=<id>`. Check it with `scripts/state.py whoami`. If the person is not a member, say so, show the project's next step, and do not change task states for them. Identity is for coordination, not security: do not present it as access control.
 - **Task states live in an event log, one file per member**: `.sancho/log/<id>.jsonl`. The scripts append to the speaker's own file and never edit anyone else's, so merging the members' work never conflicts on Sancho's state. `backlog.json` stays the plan: in team mode **never edit task statuses in `backlog.json` by hand**; use the commands below. The current state is the plan plus every event (`status` and `next` compute it).
 - Events are ordered by their timestamps, so the members' computer clocks matter: a clock that is minutes off can make a later claim look earlier. If a conflict looks wrong, check the clocks.
-- Sancho sees the others' work only after they push and this person pulls. Before `status` or `next`, suggest `git pull` if the clone may be behind.
+- Sancho sees the others' work only after they push and this person pulls. Before `status` or `next`, suggest `git pull` if the clone may be behind; after a pull, `state.py since` says what the others did.
 
 ## Commands
 
@@ -40,6 +40,16 @@ Evidence is `TYPE:VALUE`: `commit:SHA`, `test:"CMD"`, `command:"CMD"`, `file:PAT
 6. **Phases stay shared.** The coordinator opens phases, submits gates and asks for approval; the others are told whose step it is. Interviews (DISCOVER, SPECIFY, PLAN) are run with one person; the others review the documents in pull requests.
 7. **Relaying `next`.** Say the step for the speaker. When it is not theirs, say whose it is and what they can do meanwhile (a free task, a review). Use member names, not role names, when the team has them.
 8. **Branches.** One branch per task, for example `t-007-offline-login`; `claim` records the current branch. Commits keep the Conventional Commits rule with the task id.
+
+## What changed
+
+- `scripts/state.py since` lists what the others did since this person last looked: their commits, their events (claims, reviews, UAT results, defects, gate votes), phase changes and changed documents, with what concerns them first (`FOR YOU`: reviews of their tasks, news on items they hold or worked on). Their own commits and events are left out. It moves a personal marker kept in the git folder (never committed); `--peek` leaves it, `since REF` compares with any git reference.
+- Relay it in a few lines, `FOR YOU` first; then offer the next step.
+- `scripts/state.py hooks install` adds a git `post-merge` hook that prints `since` and checks the files after every pull. Each member installs it in their own clone; ask first. It refuses to replace a hook that is not Sancho's (`--force` only if the person says so). Re-run it after updating Sancho; `hooks remove` takes it away.
+
+## Duplicate ids
+
+Two members adding stories or tasks in parallel can create the same id (the coherence check reports C0 "duplicate id"). `scripts/state.py renumber` shows which later occurrence gets the next free id and which references to check; `--apply` (coordinator) writes it. References are not rewritten: ask the authors which item they meant.
 
 ## Gates
 
