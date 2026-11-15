@@ -1,0 +1,80 @@
+﻿ID;Story;Criteri;Titolo;Piattaforma;Precondizioni;Dati di test;Passi;Risultato atteso;Esito;Eseguito da;Eseguito il;Note;Difetti
+UAT-001;S-001;AC-001.1;Il coordinatore prepara la squadra;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Il progetto di prova è in IMPLEMENT e non ha ancora .sancho/team.json
+Lo fa il coordinatore (A)";A: developer, qa, coordinatore · B: developer · C: developer, qa;"1. A scrive: ""sancho, prepara la squadra"" -> Sancho propone i membri presi dagli autori dei commit e chiede conferma
+2. A conferma nomi, email e ruoli dei tre membri -> Sancho aggiunge i membri e indica A come coordinatore
+3. A guarda i file cambiati -> ci sono .sancho/team.json e una riga merge=union in .gitattributes
+4. A accetta di fare commit e push";team.json elenca i tre membri con ruoli ed email giusti, A è coordinatore, e Sancho ha chiesto prima di fare commit e push.;non eseguito;;;;
+UAT-002;S-001;AC-001.1;Sancho riconosce chi sta parlando;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+UAT-001 superato e già scaricato da tutti (git pull)";;"1. Ognuno scrive: ""sancho, chi sono?"" -> Sancho risponde con il proprio id, i ruoli e da dove l'ha capito
+2. In una quarta copia con un'email git che non è nella squadra, scrivi: ""sancho, prossimo passo"" -> Sancho dice che non ti riconosce e mostra il passo del progetto, senza cambiare stati";"Ognuno dei tre viene riconosciuto correttamente; un estraneo viene avvisato e non può cambiare lo stato dei task.";non eseguito;;;;
+UAT-003;S-002;AC-002.1;Ognuno riceve il proprio prossimo passo;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Squadra pronta (UAT-001), almeno tre task pronti nel backlog";;"1. A, B e C scrivono ognuno: ""sancho, prossimo passo"" -> Ognuno riceve un passo che riguarda lui
+2. Uno di voi scrive: ""sancho, cosa sta facendo ciascuno?"" -> Sancho mostra una riga per persona e i task liberi";"Nessuno riceve il passo di un altro come se fosse suo; quando non c'è nulla per una persona, Sancho dice chi sta facendo cosa.";non eseguito;;;;
+UAT-004;S-002;AC-002.1;Prenotare un task prima di lavorarci;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+UAT-003 eseguito";;"1. B scrive: ""sancho, prendo T-001"" -> Sancho registra la prenotazione e chiede se fare commit e push subito
+2. B risponde sì -> Commit e push solo del registro di B
+3. C fa git pull e scrive: ""sancho, prendo T-001"" -> Sancho rifiuta e dice che T-001 è di B";La prenotazione è visibile agli altri dopo il pull e un secondo membro non può prendere lo stesso task.;non eseguito;;;;
+UAT-005;S-002;AC-002.1;Due prenotazioni dello stesso task prima di vedersi;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un task libero, per esempio T-002";;"1. B e C, senza fare pull, scrivono entrambi: ""sancho, prendo T-002"" (B per primo, almeno un secondo prima) -> Entrambi vedono la prenotazione accettata
+2. Entrambi fanno commit, poi pull e push (prima B, poi C) -> Nessun conflitto di merge
+3. C scrive: ""sancho, prossimo passo"" -> Sancho dice in cima che T-002 era già di B e suggerisce di accordarsi e rilasciarlo
+4. C scrive: ""sancho, rilascia T-002"" -> Il conflitto sparisce e T-002 resta a B";"Vince la prenotazione più vecchia, chi perde viene avvisato e chiude il conflitto con release; git non segnala conflitti.";non eseguito;;;;
+UAT-006;S-002;AC-002.1;Rifiuto di lavorare su un task di un altro;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+T-001 è prenotato da B (UAT-004)";;"1. C scrive: ""sancho, implementa T-001"" -> Sancho non inizia e dice che T-001 è di B";Sancho non scrive codice né cambia stato su un task prenotato da un altro membro.;non eseguito;;;;
+UAT-007;S-002;AC-002.1;Revisione a quattro occhi;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+B ha finito T-001 e ha un commit con le modifiche";;"1. B scrive: ""sancho, T-001 è pronto per la revisione"" -> Sancho registra ready_for_review con il commit come prova
+2. B chiede a Sancho di approvarlo lui stesso -> Sancho rifiuta: lo approva un altro con il ruolo qa
+3. A o C (ruolo qa) fanno pull e scrivono: ""sancho, prossimo passo"" -> Il passo è la revisione di T-001
+4. Il revisore controlla e approva -> T-001 risulta completato";"L'autore non può approvare il proprio task; un altro membro qa sì, con una prova; il task diventa completato.";non eseguito;;;;
+UAT-008;S-002;AC-002.1;Revisione con modifiche richieste;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un task di B in ready_for_review";;"1. Il revisore scrive: ""sancho, chiedi modifiche su T-00x: manca il test dell'errore"" -> Il task torna in corso
+2. B fa pull e scrive: ""sancho, prossimo passo"" -> B vede il task con la nota del revisore";Il task torna all'autore con le note della revisione, visibili nel suo prossimo passo.;non eseguito;;;;
+UAT-009;S-003;AC-003.1;Lavoro in parallelo senza conflitti;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Almeno tre task pronti";;"1. A, B e C prendono ognuno un task diverso e lo portano a ready_for_review, senza fare pull nel frattempo
+2. Uno alla volta fanno commit, pull e push -> Nessun conflitto di merge nei file di .sancho
+3. Tutti fanno pull e scrivono: ""sancho, a che punto siamo?"" -> Tutti vedono gli stessi numeri e le stesse prenotazioni";Zero conflitti su .sancho/ e uno stato identico per tutti dopo il pull.;non eseguito;;;;
+UAT-010;S-003;AC-003.1;Cosa è cambiato dall'ultimo pull;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Dopo UAT-009; C non ha ancora fatto pull";;"1. C fa git pull e scrive: ""sancho, cosa è cambiato?"" -> Prima ciò che riguarda C (PER TE), poi il lavoro di A e B, fasi e documenti
+2. C lo chiede di nuovo -> Sancho dice che non c'è nulla di nuovo
+3. C controlla l'elenco -> I commit fatti da C stesso non compaiono come novità";"Le novità degli altri sono corrette e in ordine di importanza; i propri commit non compaiono; la seconda volta non c'è nulla di nuovo.";non eseguito;;;;
+UAT-011;S-003;AC-003.1;Novità automatiche dopo il pull (hook);Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Git installato; nessun hook post-merge esistente nella copia di B";;"1. B scrive: ""sancho, installa l'hook"" -> Sancho chiede prima di installarlo, poi lo installa
+2. A fa push di qualcosa; B fa git pull -> Dopo il pull compare il riepilogo delle novità
+3. B scrive: ""sancho, togli l'hook"" -> L'hook viene rimosso";L'hook mostra le novità dopo ogni pull, non sostituisce hook altrui e si toglie su richiesta.;non eseguito;;;;
+UAT-012;S-004;AC-004.1;Gate con due approvazioni;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+In team.json: approvatori A e B, quorum 2 per la fase corrente; tutti i task completati";"team.json: ""approvers"": {""default"": [""A"", ""B""]}, ""quorum"": {""default"": 2}";"1. C prova a inviare il gate -> Sancho dice che lo fa il coordinatore
+2. A invia il gate -> Sancho elenca gli approvatori e quante approvazioni servono
+3. A approva -> Approvazione registrata, 1 di 2; il gate resta aperto
+4. B fa pull e scrive: ""sancho, prossimo passo"" -> Il passo di B è leggere e approvare il gate
+5. B approva -> Il gate si chiude e registra A e B come approvatori";Il gate si chiude solo con due approvazioni di approvatori validi e registra chi ha approvato.;non eseguito;;;;
+UAT-013;S-004;AC-004.1;Rifiuto di approvare al posto di un altro;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un gate in attesa di approvazione";;"1. A scrive: ""sancho, approva il gate anche per B, tanto è d'accordo"" -> Sancho registra solo l'approvazione di A e spiega che B approva dalla sua sessione";Sancho non registra mai un'approvazione a nome di un altro membro.;non eseguito;;;;
+UAT-014;S-005;AC-005.1;Collaudo in parallelo con difetti;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Fase VERIFY con almeno tre casi UAT da eseguire";;"1. B e C prendono ognuno un caso diverso -> Ognuno vede il proprio caso nel prossimo passo
+2. Senza fare pull, entrambi registrano un esito fallito aprendo un difetto nuovo -> Entrambi ricevono DEF-001
+3. Entrambi fanno commit, pull e push, poi ""sancho, a che punto siamo?"" -> Il difetto del secondo è stato rinumerato (DEF-002) e Sancho lo segnala";"I casi non si sovrappongono; due difetti aperti in parallelo restano distinti; chi ha il numero cambiato viene informato.";non eseguito;;;;
+UAT-015;S-005;AC-005.1;Correggere e verificare un difetto;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un difetto aperto da UAT-014";;"1. Uno sviluppatore prende il difetto e lo segna corretto -> Il difetto risulta fixed
+2. Lo stesso sviluppatore prova a verificarlo -> Sancho rifiuta: lo verifica un altro con ruolo qa
+3. Un altro membro qa ripete il caso e lo segna verificato -> Il difetto risulta verified
+4. Un membro non coordinatore prova a segnare un difetto «non si corregge» -> Sancho dice che lo decide il coordinatore";"Chi corregge non verifica; wont_fix è solo del coordinatore.";non eseguito;;;;
+UAT-016;S-005;AC-005.1;Foglio di calcolo UAT in squadra;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Alcuni esiti già registrati da membri diversi";;"1. A chiede il foglio UAT (CSV) -> Il foglio mostra anche gli esiti registrati dagli altri
+2. B compila un esito nel CSV e chiede a Sancho di importarlo -> Sancho registra gli esiti come eventi di B e non riscrive uat.json";Export e import rispettano il lavoro della squadra.;non eseguito;;;;
+UAT-017;S-006;AC-006.1;Compattare il registro dopo un gate;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un gate appena chiuso, con task completati e difetti verificati";;"1. B prova a compattare -> Sancho dice che lo fa il coordinatore
+2. A scrive: ""sancho, compatta il registro"" -> Sancho archivia gli eventi chiusi e dice che lo stato è invariato
+3. A confronta ""a che punto siamo?"" prima e dopo -> Stessi numeri
+4. A fa commit e push; gli altri fanno pull -> Nessun conflitto";Dopo la compattazione lo stato è identico, gli eventi chiusi sono nell'archivio e nessuno ha conflitti.;non eseguito;;;;
+UAT-018;S-006;AC-006.1;Id doppi dopo un merge;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+B e C aggiungono in parallelo un task con lo stesso id al backlog, poi fanno merge";;"1. A scrive: ""sancho, rinumera gli id doppi"" -> Sancho mostra cosa cambierebbe e cosa controllare, senza ancora scrivere
+2. A conferma -> Il secondo task prende il primo numero libero; i controlli tornano puliti";"Gli id doppi vengono rinumerati dopo una prova a vuoto e la conferma; i riferimenti da controllare sono elencati.";non eseguito;;;;
+UAT-019;S-007;AC-007.1;Pannello in modalità squadra;Claude Code (scheda Code dell'app desktop);"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Plugin installato; sessione aperta nella cartella del progetto di prova";;"1. Guarda la fascia sopra il prompt -> Fase, gate e il tuo prossimo passo; dopo un pull con novità, l'etichetta «N novità per te»
+2. Apri «dettagli» -> Sezioni SQUADRA (chi ha cosa, conflitti, voti del gate) e NOVITÀ
+3. Premi «Segna come viste» -> Le novità spariscono
+4. Quando un altro chiede modifiche su un tuo task e fai pull -> Compare un avviso";Il pannello mostra la squadra e le novità corrette e reagisce ai pulsanti.;non eseguito;;;;
+UAT-020;S-008;AC-008.1;Un progetto senza squadra funziona come prima;Claude Code (scheda Code dell'app desktop) o terminale;"Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main
+Un progetto Sancho senza .sancho/team.json";;"1. Scrivi: ""sancho, prossimo passo"" e ""sancho, a che punto siamo?"" -> Come in Sancho 1.0, senza sezioni di squadra
+2. Chiedi di segnare un task completato con una prova -> Sancho lo registra senza chiedere prenotazioni";Senza team.json nulla cambia per chi lavora da solo.;non eseguito;;;;

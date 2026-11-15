@@ -133,7 +133,7 @@ L'esempio completo, fittizio, è in [examples/fieldlog](examples/fieldlog/WALKTH
 ## Sviluppo
 
 ```bash
-python -I tests/validate.py      # 46 controlli offline: schemi, fixture, script, esempio, eval
+python -I tests/validate.py      # 47 controlli offline: schemi, fixture, script, esempio, eval
 claude plugin test .            # test del pannello (fascia, dettagli, avvisi)
 python tools/build.py            # rigenera agents/ da roles/ e costruisce dist/sancho.zip
 python tools/set_owner.py --user <utente-github> --name "<Nome Cognome>"   # sostituisce i segnaposto una volta

@@ -1170,6 +1170,23 @@ def team_uat_spreadsheet_and_coherence() -> None:
 
 
 @check
+def team_sandbox_and_uat_checklist() -> None:
+    # the sandbox for the team-mode UAT stays valid and coherent; the UAT checklist stays valid and exported
+    ua = load(ROOT / "tests/uat/team-mode/uat.json")
+    assert not validate(ua, "uat") and len(ua["cases"]) >= 20
+    assert (ROOT / "docs/testing/team-mode-UAT.md").is_file() and (ROOT / "docs/testing/team-mode-uat.csv").is_file()
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, "-I", str(ROOT / "tools/team_sandbox.py"), str(Path(tmp) / "sbx")],
+                           capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        anna = Path(tmp) / "sbx" / "anna"
+        assert run("state.py", "validate", cwd=anna).returncode == 0
+        assert run("state.py", "coherence", cwd=anna).returncode == 0
+        suggested = run("state.py", "team", "suggest", cwd=anna).stdout
+        assert all(f"{n}@example.com" in suggested for n in ("anna", "bruno", "carla")), suggested
+
+
+@check
 def renumber_duplicate_ids() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)

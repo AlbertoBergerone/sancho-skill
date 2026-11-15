@@ -1,0 +1,642 @@
+{
+  "protocol": "sancho/1.0",
+  "build": "main @ 1cf3fe8 (modalità team, tappe 1-4)",
+  "cases": [
+    {
+      "id": "UAT-001",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.1"
+      ],
+      "title": "Il coordinatore prepara la squadra",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Il progetto di prova è in IMPLEMENT e non ha ancora .sancho/team.json",
+        "Lo fa il coordinatore (A)"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A scrive: \"sancho, prepara la squadra\"",
+          "expected": "Sancho propone i membri presi dagli autori dei commit e chiede conferma"
+        },
+        {
+          "n": 2,
+          "action": "A conferma nomi, email e ruoli dei tre membri",
+          "expected": "Sancho aggiunge i membri e indica A come coordinatore"
+        },
+        {
+          "n": 3,
+          "action": "A guarda i file cambiati",
+          "expected": "ci sono .sancho/team.json e una riga merge=union in .gitattributes"
+        },
+        {
+          "n": 4,
+          "action": "A accetta di fare commit e push"
+        }
+      ],
+      "expected_result": "team.json elenca i tre membri con ruoli ed email giusti, A è coordinatore, e Sancho ha chiesto prima di fare commit e push.",
+      "result": "not_tested",
+      "test_data": [
+        "A: developer, qa, coordinatore · B: developer · C: developer, qa"
+      ]
+    },
+    {
+      "id": "UAT-002",
+      "story": "S-001",
+      "criteria": [
+        "AC-001.1"
+      ],
+      "title": "Sancho riconosce chi sta parlando",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "UAT-001 superato e già scaricato da tutti (git pull)"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Ognuno scrive: \"sancho, chi sono?\"",
+          "expected": "Sancho risponde con il proprio id, i ruoli e da dove l'ha capito"
+        },
+        {
+          "n": 2,
+          "action": "In una quarta copia con un'email git che non è nella squadra, scrivi: \"sancho, prossimo passo\"",
+          "expected": "Sancho dice che non ti riconosce e mostra il passo del progetto, senza cambiare stati"
+        }
+      ],
+      "expected_result": "Ognuno dei tre viene riconosciuto correttamente; un estraneo viene avvisato e non può cambiare lo stato dei task.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-003",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Ognuno riceve il proprio prossimo passo",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Squadra pronta (UAT-001), almeno tre task pronti nel backlog"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A, B e C scrivono ognuno: \"sancho, prossimo passo\"",
+          "expected": "Ognuno riceve un passo che riguarda lui"
+        },
+        {
+          "n": 2,
+          "action": "Uno di voi scrive: \"sancho, cosa sta facendo ciascuno?\"",
+          "expected": "Sancho mostra una riga per persona e i task liberi"
+        }
+      ],
+      "expected_result": "Nessuno riceve il passo di un altro come se fosse suo; quando non c'è nulla per una persona, Sancho dice chi sta facendo cosa.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-004",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Prenotare un task prima di lavorarci",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "UAT-003 eseguito"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B scrive: \"sancho, prendo T-001\"",
+          "expected": "Sancho registra la prenotazione e chiede se fare commit e push subito"
+        },
+        {
+          "n": 2,
+          "action": "B risponde sì",
+          "expected": "Commit e push solo del registro di B"
+        },
+        {
+          "n": 3,
+          "action": "C fa git pull e scrive: \"sancho, prendo T-001\"",
+          "expected": "Sancho rifiuta e dice che T-001 è di B"
+        }
+      ],
+      "expected_result": "La prenotazione è visibile agli altri dopo il pull e un secondo membro non può prendere lo stesso task.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-005",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Due prenotazioni dello stesso task prima di vedersi",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un task libero, per esempio T-002"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B e C, senza fare pull, scrivono entrambi: \"sancho, prendo T-002\" (B per primo, almeno un secondo prima)",
+          "expected": "Entrambi vedono la prenotazione accettata"
+        },
+        {
+          "n": 2,
+          "action": "Entrambi fanno commit, poi pull e push (prima B, poi C)",
+          "expected": "Nessun conflitto di merge"
+        },
+        {
+          "n": 3,
+          "action": "C scrive: \"sancho, prossimo passo\"",
+          "expected": "Sancho dice in cima che T-002 era già di B e suggerisce di accordarsi e rilasciarlo"
+        },
+        {
+          "n": 4,
+          "action": "C scrive: \"sancho, rilascia T-002\"",
+          "expected": "Il conflitto sparisce e T-002 resta a B"
+        }
+      ],
+      "expected_result": "Vince la prenotazione più vecchia, chi perde viene avvisato e chiude il conflitto con release; git non segnala conflitti.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-006",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Rifiuto di lavorare su un task di un altro",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "T-001 è prenotato da B (UAT-004)"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "C scrive: \"sancho, implementa T-001\"",
+          "expected": "Sancho non inizia e dice che T-001 è di B"
+        }
+      ],
+      "expected_result": "Sancho non scrive codice né cambia stato su un task prenotato da un altro membro.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-007",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Revisione a quattro occhi",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "B ha finito T-001 e ha un commit con le modifiche"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B scrive: \"sancho, T-001 è pronto per la revisione\"",
+          "expected": "Sancho registra ready_for_review con il commit come prova"
+        },
+        {
+          "n": 2,
+          "action": "B chiede a Sancho di approvarlo lui stesso",
+          "expected": "Sancho rifiuta: lo approva un altro con il ruolo qa"
+        },
+        {
+          "n": 3,
+          "action": "A o C (ruolo qa) fanno pull e scrivono: \"sancho, prossimo passo\"",
+          "expected": "Il passo è la revisione di T-001"
+        },
+        {
+          "n": 4,
+          "action": "Il revisore controlla e approva",
+          "expected": "T-001 risulta completato"
+        }
+      ],
+      "expected_result": "L'autore non può approvare il proprio task; un altro membro qa sì, con una prova; il task diventa completato.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-008",
+      "story": "S-002",
+      "criteria": [
+        "AC-002.1"
+      ],
+      "title": "Revisione con modifiche richieste",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un task di B in ready_for_review"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Il revisore scrive: \"sancho, chiedi modifiche su T-00x: manca il test dell'errore\"",
+          "expected": "Il task torna in corso"
+        },
+        {
+          "n": 2,
+          "action": "B fa pull e scrive: \"sancho, prossimo passo\"",
+          "expected": "B vede il task con la nota del revisore"
+        }
+      ],
+      "expected_result": "Il task torna all'autore con le note della revisione, visibili nel suo prossimo passo.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-009",
+      "story": "S-003",
+      "criteria": [
+        "AC-003.1"
+      ],
+      "title": "Lavoro in parallelo senza conflitti",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Almeno tre task pronti"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A, B e C prendono ognuno un task diverso e lo portano a ready_for_review, senza fare pull nel frattempo"
+        },
+        {
+          "n": 2,
+          "action": "Uno alla volta fanno commit, pull e push",
+          "expected": "Nessun conflitto di merge nei file di .sancho"
+        },
+        {
+          "n": 3,
+          "action": "Tutti fanno pull e scrivono: \"sancho, a che punto siamo?\"",
+          "expected": "Tutti vedono gli stessi numeri e le stesse prenotazioni"
+        }
+      ],
+      "expected_result": "Zero conflitti su .sancho/ e uno stato identico per tutti dopo il pull.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-010",
+      "story": "S-003",
+      "criteria": [
+        "AC-003.1"
+      ],
+      "title": "Cosa è cambiato dall'ultimo pull",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Dopo UAT-009; C non ha ancora fatto pull"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "C fa git pull e scrive: \"sancho, cosa è cambiato?\"",
+          "expected": "Prima ciò che riguarda C (PER TE), poi il lavoro di A e B, fasi e documenti"
+        },
+        {
+          "n": 2,
+          "action": "C lo chiede di nuovo",
+          "expected": "Sancho dice che non c'è nulla di nuovo"
+        },
+        {
+          "n": 3,
+          "action": "C controlla l'elenco",
+          "expected": "I commit fatti da C stesso non compaiono come novità"
+        }
+      ],
+      "expected_result": "Le novità degli altri sono corrette e in ordine di importanza; i propri commit non compaiono; la seconda volta non c'è nulla di nuovo.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-011",
+      "story": "S-003",
+      "criteria": [
+        "AC-003.1"
+      ],
+      "title": "Novità automatiche dopo il pull (hook)",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Git installato; nessun hook post-merge esistente nella copia di B"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B scrive: \"sancho, installa l'hook\"",
+          "expected": "Sancho chiede prima di installarlo, poi lo installa"
+        },
+        {
+          "n": 2,
+          "action": "A fa push di qualcosa; B fa git pull",
+          "expected": "Dopo il pull compare il riepilogo delle novità"
+        },
+        {
+          "n": 3,
+          "action": "B scrive: \"sancho, togli l'hook\"",
+          "expected": "L'hook viene rimosso"
+        }
+      ],
+      "expected_result": "L'hook mostra le novità dopo ogni pull, non sostituisce hook altrui e si toglie su richiesta.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-012",
+      "story": "S-004",
+      "criteria": [
+        "AC-004.1"
+      ],
+      "title": "Gate con due approvazioni",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "In team.json: approvatori A e B, quorum 2 per la fase corrente; tutti i task completati"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "C prova a inviare il gate",
+          "expected": "Sancho dice che lo fa il coordinatore"
+        },
+        {
+          "n": 2,
+          "action": "A invia il gate",
+          "expected": "Sancho elenca gli approvatori e quante approvazioni servono"
+        },
+        {
+          "n": 3,
+          "action": "A approva",
+          "expected": "Approvazione registrata, 1 di 2; il gate resta aperto"
+        },
+        {
+          "n": 4,
+          "action": "B fa pull e scrive: \"sancho, prossimo passo\"",
+          "expected": "Il passo di B è leggere e approvare il gate"
+        },
+        {
+          "n": 5,
+          "action": "B approva",
+          "expected": "Il gate si chiude e registra A e B come approvatori"
+        }
+      ],
+      "expected_result": "Il gate si chiude solo con due approvazioni di approvatori validi e registra chi ha approvato.",
+      "result": "not_tested",
+      "test_data": [
+        "team.json: \"approvers\": {\"default\": [\"A\", \"B\"]}, \"quorum\": {\"default\": 2}"
+      ]
+    },
+    {
+      "id": "UAT-013",
+      "story": "S-004",
+      "criteria": [
+        "AC-004.1"
+      ],
+      "title": "Rifiuto di approvare al posto di un altro",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un gate in attesa di approvazione"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A scrive: \"sancho, approva il gate anche per B, tanto è d'accordo\"",
+          "expected": "Sancho registra solo l'approvazione di A e spiega che B approva dalla sua sessione"
+        }
+      ],
+      "expected_result": "Sancho non registra mai un'approvazione a nome di un altro membro.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-014",
+      "story": "S-005",
+      "criteria": [
+        "AC-005.1"
+      ],
+      "title": "Collaudo in parallelo con difetti",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Fase VERIFY con almeno tre casi UAT da eseguire"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B e C prendono ognuno un caso diverso",
+          "expected": "Ognuno vede il proprio caso nel prossimo passo"
+        },
+        {
+          "n": 2,
+          "action": "Senza fare pull, entrambi registrano un esito fallito aprendo un difetto nuovo",
+          "expected": "Entrambi ricevono DEF-001"
+        },
+        {
+          "n": 3,
+          "action": "Entrambi fanno commit, pull e push, poi \"sancho, a che punto siamo?\"",
+          "expected": "Il difetto del secondo è stato rinumerato (DEF-002) e Sancho lo segnala"
+        }
+      ],
+      "expected_result": "I casi non si sovrappongono; due difetti aperti in parallelo restano distinti; chi ha il numero cambiato viene informato.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-015",
+      "story": "S-005",
+      "criteria": [
+        "AC-005.1"
+      ],
+      "title": "Correggere e verificare un difetto",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un difetto aperto da UAT-014"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Uno sviluppatore prende il difetto e lo segna corretto",
+          "expected": "Il difetto risulta fixed"
+        },
+        {
+          "n": 2,
+          "action": "Lo stesso sviluppatore prova a verificarlo",
+          "expected": "Sancho rifiuta: lo verifica un altro con ruolo qa"
+        },
+        {
+          "n": 3,
+          "action": "Un altro membro qa ripete il caso e lo segna verificato",
+          "expected": "Il difetto risulta verified"
+        },
+        {
+          "n": 4,
+          "action": "Un membro non coordinatore prova a segnare un difetto «non si corregge»",
+          "expected": "Sancho dice che lo decide il coordinatore"
+        }
+      ],
+      "expected_result": "Chi corregge non verifica; wont_fix è solo del coordinatore.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-016",
+      "story": "S-005",
+      "criteria": [
+        "AC-005.1"
+      ],
+      "title": "Foglio di calcolo UAT in squadra",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Alcuni esiti già registrati da membri diversi"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A chiede il foglio UAT (CSV)",
+          "expected": "Il foglio mostra anche gli esiti registrati dagli altri"
+        },
+        {
+          "n": 2,
+          "action": "B compila un esito nel CSV e chiede a Sancho di importarlo",
+          "expected": "Sancho registra gli esiti come eventi di B e non riscrive uat.json"
+        }
+      ],
+      "expected_result": "Export e import rispettano il lavoro della squadra.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-017",
+      "story": "S-006",
+      "criteria": [
+        "AC-006.1"
+      ],
+      "title": "Compattare il registro dopo un gate",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un gate appena chiuso, con task completati e difetti verificati"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "B prova a compattare",
+          "expected": "Sancho dice che lo fa il coordinatore"
+        },
+        {
+          "n": 2,
+          "action": "A scrive: \"sancho, compatta il registro\"",
+          "expected": "Sancho archivia gli eventi chiusi e dice che lo stato è invariato"
+        },
+        {
+          "n": 3,
+          "action": "A confronta \"a che punto siamo?\" prima e dopo",
+          "expected": "Stessi numeri"
+        },
+        {
+          "n": 4,
+          "action": "A fa commit e push; gli altri fanno pull",
+          "expected": "Nessun conflitto"
+        }
+      ],
+      "expected_result": "Dopo la compattazione lo stato è identico, gli eventi chiusi sono nell'archivio e nessuno ha conflitti.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-018",
+      "story": "S-006",
+      "criteria": [
+        "AC-006.1"
+      ],
+      "title": "Id doppi dopo un merge",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "B e C aggiungono in parallelo un task con lo stesso id al backlog, poi fanno merge"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "A scrive: \"sancho, rinumera gli id doppi\"",
+          "expected": "Sancho mostra cosa cambierebbe e cosa controllare, senza ancora scrivere"
+        },
+        {
+          "n": 2,
+          "action": "A conferma",
+          "expected": "Il secondo task prende il primo numero libero; i controlli tornano puliti"
+        }
+      ],
+      "expected_result": "Gli id doppi vengono rinumerati dopo una prova a vuoto e la conferma; i riferimenti da controllare sono elencati.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-019",
+      "story": "S-007",
+      "criteria": [
+        "AC-007.1"
+      ],
+      "title": "Pannello in modalità squadra",
+      "platform": "Claude Code (scheda Code dell'app desktop)",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Plugin installato; sessione aperta nella cartella del progetto di prova"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Guarda la fascia sopra il prompt",
+          "expected": "Fase, gate e il tuo prossimo passo; dopo un pull con novità, l'etichetta «N novità per te»"
+        },
+        {
+          "n": 2,
+          "action": "Apri «dettagli»",
+          "expected": "Sezioni SQUADRA (chi ha cosa, conflitti, voti del gate) e NOVITÀ"
+        },
+        {
+          "n": 3,
+          "action": "Premi «Segna come viste»",
+          "expected": "Le novità spariscono"
+        },
+        {
+          "n": 4,
+          "action": "Quando un altro chiede modifiche su un tuo task e fai pull",
+          "expected": "Compare un avviso"
+        }
+      ],
+      "expected_result": "Il pannello mostra la squadra e le novità corrette e reagisce ai pulsanti.",
+      "result": "not_tested"
+    },
+    {
+      "id": "UAT-020",
+      "story": "S-008",
+      "criteria": [
+        "AC-008.1"
+      ],
+      "title": "Un progetto senza squadra funziona come prima",
+      "platform": "Claude Code (scheda Code dell'app desktop) o terminale",
+      "preconditions": [
+        "Ambiente di prova pronto (piano di test, sezione 3): tre copie del repository di prova, una per persona, con il plugin Sancho da main",
+        "Un progetto Sancho senza .sancho/team.json"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "action": "Scrivi: \"sancho, prossimo passo\" e \"sancho, a che punto siamo?\"",
+          "expected": "Come in Sancho 1.0, senza sezioni di squadra"
+        },
+        {
+          "n": 2,
+          "action": "Chiedi di segnare un task completato con una prova",
+          "expected": "Sancho lo registra senza chiedere prenotazioni"
+        }
+      ],
+      "expected_result": "Senza team.json nulla cambia per chi lavora da solo.",
+      "result": "not_tested"
+    }
+  ],
+  "defects": []
+}
