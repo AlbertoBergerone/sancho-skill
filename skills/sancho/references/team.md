@@ -66,6 +66,14 @@ Two members adding stories or tasks in parallel can create the same id (the cohe
 - Developers claim defects (`claim DEF-002`), fix them (IMPLEMENT loop rules) and mark them `fixed`; someone else with the qa role re-runs the case and marks them `verified` (or back to `open`). `next` gives blocker defects first.
 - `wont_fix` accepts a risk: only the coordinator records it, after the team (and the gate approvers) agreed.
 
+## UAT spreadsheets in a team
+
+`scripts/uat_export.py .sancho/uat.json --md ... --csv ...` exports the team's current results (events included). `--import-csv FILE` records the results as the speaking member's events (cases claimed by others are skipped and listed). It never rewrites `uat.json` in team mode.
+
+## After a merge
+
+`scripts/state.py coherence` runs the coherence check at the stage of the current phase; the post-merge hook runs it quietly and prints only blocker or major issues.
+
 ## Compaction
 
 After a gate closes, the coordinator runs `state.py compact`: events of settled items (completed tasks, executed cases whose defects are closed, verified or wont_fix defects, votes of closed gates) move into `backlog.json` / `uat.json` and `.sancho/log/archive/`. The state is identical before and after (the command checks it and undoes itself otherwise). Commit the result in one commit and push it soon, so the others pull it before appending much more.

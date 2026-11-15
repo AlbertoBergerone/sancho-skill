@@ -12,6 +12,10 @@ CSV is written as UTF-8 with BOM so spreadsheet apps detect the encoding; use
 --delimiter ";" for spreadsheet apps configured for Italian/Spanish locales.
 On import, a failed case without defects gets a new open defect (severity major)
 that the QA role must triage; the script prints what it created.
+
+Team mode (.sancho/team.json in the project): the export shows the team's current
+results (the UAT file plus the members' event logs), and an import is recorded as the
+speaking member's events (uat_result, defect_open) instead of rewriting uat.json.
 """
 from __future__ import annotations
 
@@ -251,6 +255,62 @@ def import_csv(uat: dict, csv_path: Path, tester: Optional[str]) -> List[str]:
     return log
 
 
+def team_project(uat_path: Path):
+    """The state.Project when uat_path is the UAT file of a project in team mode, else None."""
+    from _common import find_root
+    import _team
+    root = find_root(uat_path.resolve().parent)
+    if root is None or not _team.team_path(root).is_file():
+        return None
+    import state  # noqa: E402 (sibling script; its main() only runs as a script)
+    p = state.Project(root)
+    if p.uat_path().resolve() != uat_path.resolve() or p.team() is None:
+        return None
+    return p
+
+
+def import_as_events(project, uat: dict, csv_path: Path, tester: Optional[str]) -> None:
+    """Team mode: the CSV results become the speaking member's events."""
+    import copy
+    import _team
+    team = project.team()
+    me, how = _team.whoami(project.root, team)
+    if me is None:
+        die(f"who are you? {how}")
+    after = copy.deepcopy(uat)
+    for line in import_csv(after, csv_path, tester or _team.members(team)[me]["name"]):
+        print(line)
+    errors = validate(after, "uat")
+    if errors:
+        die("import would make the UAT results invalid, nothing recorded:\n  " + "\n  ".join(errors[:10]))
+    known = {d["id"] for d in uat.get("defects", [])}
+    claims = project.folded()[1]["claims"]
+    before = {c["id"]: c for c in uat.get("cases", [])}
+    recorded = 0
+    for d in after.get("defects", []):
+        if d["id"] not in known:
+            _team.append_event(project.root, {"by": me, "event": "defect_open", "defect": d["id"], "uat": d["uat"],
+                                              "severity": d["severity"], "description": d["description"]})
+    for c in after.get("cases", []):
+        old = before.get(c["id"], {})
+        if c["result"] == old.get("result") and c.get("notes") == old.get("notes") and c.get("defects") == old.get("defects"):
+            continue
+        holder = claims.get(c["id"], {}).get("by")
+        if holder and holder != me:
+            print(f"{c['id']}: skipped, claimed by {holder}")
+            continue
+        if c["result"] == "not_tested":
+            continue
+        ev = {"by": me, "event": "uat_result", "case": c["id"], "result": c["result"]}
+        if c.get("notes"):
+            ev["note"] = c["notes"]
+        if c.get("defects"):
+            ev["defects"] = c["defects"]
+        _team.append_event(project.root, ev)
+        recorded += 1
+    print(f"recorded {recorded} result(s) as events of {me}; commit and push .sancho/log/{me}.jsonl (ask first)")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     configure_stdout()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -266,14 +326,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         die(f"UAT file not found: {args.uat}")
     uat = load_json(args.uat)
     lang = pick_lang(args.uat, args.lang)
+    project = team_project(args.uat)
+    if project is not None:
+        uat = project.uat()  # the team's current results, events included
     if args.import_csv:
-        for line in import_csv(uat, args.import_csv, args.tester):
-            print(line)
-        errors = validate(uat, "uat")
-        if errors:
-            die("import would make the UAT file invalid, nothing saved:\n  " + "\n  ".join(errors[:10]))
-        save_json(args.uat, uat)
-        print(f"updated {args.uat}")
+        if project is not None:
+            import_as_events(project, uat, args.import_csv, args.tester)
+            uat = team_project(args.uat).uat()  # type: ignore[union-attr]
+        else:
+            for line in import_csv(uat, args.import_csv, args.tester):
+                print(line)
+            errors = validate(uat, "uat")
+            if errors:
+                die("import would make the UAT file invalid, nothing saved:\n  " + "\n  ".join(errors[:10]))
+            save_json(args.uat, uat)
+            print(f"updated {args.uat}")
     if not (args.md or args.csv or args.import_csv):
         die("nothing to do: pass --md, --csv or --import-csv")
     if args.md:

@@ -1132,6 +1132,44 @@ def team_since_and_hook() -> None:
 
 
 @check
+def team_uat_spreadsheet_and_coherence() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        team_project(t)
+        to_phase(t, "verify")
+        (t / ".sancho/uat.json").write_text(json.dumps(uat_cases()), encoding="utf-8")
+        plan = (t / ".sancho/uat.json").read_text(encoding="utf-8")
+        assert run_as("sara", "state.py", "uat", "UAT-001", "--result", "pass", cwd=t).returncode == 0
+        # the export shows the team's results, events included
+        def export_as(member: str) -> subprocess.CompletedProcess:
+            return run_as(member, "uat_export.py", ".sancho/uat.json", "--csv", "docs/uat/uat.csv", "--md", "docs/uat/UAT.md", cwd=t)
+        assert export_as("sara").returncode == 0
+        rows = list(csv.reader((t / "docs/uat/uat.csv").read_text(encoding="utf-8-sig").splitlines()))
+        by_id = {r[0]: r for r in rows[1:]}
+        assert by_id["UAT-001"][9] == "pass" and by_id["UAT-001"][10] == "Sara", by_id["UAT-001"]
+        # luca fills the spreadsheet: UAT-002 fails; the import becomes luca's events, uat.json is untouched
+        by_id["UAT-002"][9] = "fail"
+        by_id["UAT-002"][12] = "crash on save"
+        with open(t / "docs/uat/uat.csv", "w", encoding="utf-8", newline="") as fh:
+            csv.writer(fh).writerows([rows[0], *by_id.values()])
+        r = run_as("luca", "uat_export.py", ".sancho/uat.json", "--import-csv", "docs/uat/uat.csv", cwd=t)
+        assert r.returncode == 0 and "recorded 1 result(s) as events of luca" in r.stdout, r.stdout + r.stderr
+        assert (t / ".sancho/uat.json").read_text(encoding="utf-8") == plan, "team mode never rewrites uat.json"
+        s = tasks_of(t)
+        assert s["uat"] == {"pass": 1, "fail": 1, "not_tested": 1} and s["open_defects"]["major"] == 1, s
+        log = (t / ".sancho/log/luca.jsonl").read_text(encoding="utf-8")
+        assert '"event":"defect_open"' in log and '"case":"UAT-002"' in log, log
+        assert run("state.py", "validate", cwd=t).returncode == 0
+        # coherence picks the stage of the phase; quiet prints only on blocker/major issues
+        r = run("state.py", "coherence", "--json", cwd=t)
+        assert r.returncode in (0, 1) and json.loads(r.stdout) is not None, r.stdout + r.stderr
+        q = run("state.py", "coherence", "--quiet", cwd=t)
+        assert (q.stdout.strip() == "") == (q.returncode == 0), q.stdout
+        free = run_as("luca", "state.py", "next", "--team", cwd=t).stdout
+        assert "UAT-003" in free and "DEF-001" in free, free
+
+
+@check
 def renumber_duplicate_ids() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)

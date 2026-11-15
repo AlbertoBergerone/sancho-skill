@@ -48,6 +48,7 @@ Topics (answer from these sources, one screen each):
 | gates | `references/gates.md` summary |
 | files | SKILL.md section 6 |
 | levels | `references/taxonomy.md` risk levels |
+| team | `references/team.md`: how team mode works, the commands, who does what (gates, reviews, VERIFY) |
 
 End every help answer with the current `next` line when a project exists.
 

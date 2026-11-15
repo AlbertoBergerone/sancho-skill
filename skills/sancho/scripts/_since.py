@@ -181,7 +181,7 @@ def hook_text(root: Path, state_py: Path) -> str:
     candidates = " ".join(f'"{c}"' for c in (Path(sys.executable).as_posix(), "python3", "python"))
     return f"""#!/bin/sh
 {HOOK_MARK}
-# After a pull: what changed in the Sancho project (state.py since) and whether its files are valid.
+# After a pull: what changed in the Sancho project (state.py since), whether its files are valid and coherent.
 # Re-run `state.py hooks install` after moving or updating Sancho. Remove with `state.py hooks remove`.
 cd "$(git rev-parse --show-toplevel)/{pre}" 2>/dev/null || exit 0
 PY=""
@@ -191,6 +191,7 @@ done
 [ -n "$PY" ] || exit 0
 "$PY" -I "{state_py.as_posix()}" since
 "$PY" -I "{state_py.as_posix()}" validate >/dev/null 2>&1 || echo "sancho: some project files are invalid - run state.py validate"
+"$PY" -I "{state_py.as_posix()}" coherence --quiet
 exit 0
 """
 

@@ -37,6 +37,7 @@ Team mode (when .sancho/team.json exists; see references/team.md):
   since      [REF] [--json] [--peek]       what changed since you last looked (git): commits, events, phases, files
   hooks      install|remove|status [--force]   post-merge hook: `since` and `validate` after every pull
   renumber   [--apply]                     rename duplicate ids after a merge (dry run without --apply)
+  coherence  [--json] [--quiet]            coherence_check.py at the stage of the current phase
   Gates: the coordinator starts and submits; approvers (team.json approvers/quorum) approve or reject.
 
 Exit codes: 0 ok, 1 refused (gate rules), 2 usage/input error.
@@ -515,6 +516,10 @@ def team_overview(p: Project) -> dict:
     bl, view, _ = p.folded()
     per_member = {m["id"]: team_next(p, m["id"]) for m in team["members"]}
     free = [t["id"] for t in ready_tasks(bl) if t["id"] not in view["claims"]]
+    if p.state["current_phase"] == "verify":
+        ua = p.uat()
+        free += [c["id"] for c in ua.get("cases", []) if c["result"] in ("not_tested", "blocked") and c["id"] not in view["claims"]]
+        free += [d["id"] for d in ua.get("defects", []) if d["status"] == "open" and d["id"] not in view["claims"]]
     return {"members": per_member, "free": free, "conflicts": view["conflicts"],
             "stale": _team.stale(view, team), "claims": view["claims"]}
 
@@ -870,6 +875,37 @@ def cmd_renumber(a: argparse.Namespace) -> int:
         save_json(p.uat_path(), ua)
     print("renumbered; run the coherence check (`coherence_check.py`) and fix the references listed under CHECK")
     return 0
+
+
+COHERENCE_STAGE = {"specify": "spec", "plan": "spec", "tasks": "tasks"}
+
+
+def cmd_coherence(a: argparse.Namespace) -> int:
+    """Run coherence_check.py at the stage that fits the current phase (used after merges)."""
+    import subprocess
+    p = open_project()
+    ph = p.state["current_phase"]
+    if ph == "discover" or not p.backlog_path().is_file():
+        print("coherence: nothing to check yet (no backlog, or still in DISCOVER)")
+        return 0
+    stage = COHERENCE_STAGE.get(ph, "full")
+    cmd = [sys.executable, "-I", str(Path(__file__).resolve().parent / "coherence_check.py"), str(p.backlog_path()), "--stage", stage]
+    if stage != "spec" and p.uat_path().is_file():
+        cmd += ["--uat", str(p.uat_path())]
+    if a.json:
+        cmd.append("--json")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    out = r.stdout.strip()
+    if a.quiet and r.returncode == 0:
+        return 0
+    if a.quiet:
+        lines = [x for x in out.splitlines() if x.startswith("[blocker]") or x.startswith("[major]")]
+        print(f"sancho: coherence ({stage}) found {len(lines)} blocker/major issue(s) after the merge - run state.py coherence")
+        for x in lines[:5]:
+            print(f"  {x}")
+        return r.returncode
+    print(out or r.stderr.strip())
+    return r.returncode
 
 
 GATE_EVENTS = ("gate_approve", "gate_reject")
@@ -1650,6 +1686,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--force", action="store_true")
     s = sub.add_parser("renumber")
     s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("coherence")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--quiet", action="store_true", help="print only when there are blocker/major issues")
     s = sub.add_parser("checklist")
     s.add_argument("phase", choices=PHASES)
     s = sub.add_parser("start")

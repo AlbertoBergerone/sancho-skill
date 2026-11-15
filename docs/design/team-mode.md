@@ -244,3 +244,6 @@ Ogni tappa è rilasciabile da sola (1.1.0, 1.2.0...), e la modalità singola non
 5. **Nomi**: gli `id` dei membri li sceglie la squadra; per un progetto pubblico basta usare pseudonimi come id e nomi.
 6. **Difetti con lo stesso numero** aperti in parallelo: il secondo prende il numero libero successivo (`RENAMED` in `status`).
 7. **Revisione a quattro occhi** anche per la verifica dei difetti; `wont_fix` solo dal coordinatore.
+8. **Prova del commit su `main` per completare un task** (3.9): non introdotta. Con le pull request la revisione avviene prima del merge, quindi il commit non è ancora su `main` quando il task viene approvato; resta la regola di Conventional Commits con l'id del task.
+9. **Coerenza dopo il merge** (3.8): `state.py coherence` sceglie lo stadio dalla fase corrente; l'hook `post-merge` la esegue e segnala solo problemi blocker o major.
+10. **Fogli UAT in squadra**: l'export mostra i risultati correnti della squadra e l'import diventa eventi di chi lo esegue.
